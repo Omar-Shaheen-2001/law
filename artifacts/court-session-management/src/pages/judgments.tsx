@@ -379,119 +379,141 @@ export default function JudgmentsPage() {
           ))}
         </div>
       ) : filteredRecords.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in-up fade-in-up-delay-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 fade-in-up fade-in-up-delay-2">
           {filteredRecords.map((rec) => {
             const isFinal = rec.isFavorable === 'نهائي' || rec.isFavorable === 'نعم';
+            const dayName = getArabicDayName({ sessionDateHijri: rec.judgmentDate });
 
             return (
               <div
                 key={rec.id}
-                className="rounded-xl border border-border bg-card p-5 relative group transition-all duration-200 hover:border-primary/30 hover:shadow-md flex flex-col justify-between"
+                className="rounded-2xl border border-border bg-card p-5 relative group transition-all duration-200 hover:border-emerald-500/40 hover:shadow-lg flex flex-col justify-between"
               >
                 <div>
-                  {/* Top Bar: Case Deed & Result Badge */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <Gavel className="w-4 h-4 text-primary" />
-                      </div>
-                      <div>
-                        {rec.caseNumber && (
-                          <div className="text-xs text-primary font-semibold">قضية رقم: {rec.caseNumber}</div>
+                  {/* Top Bar: Case Number, Judgment Deed & Status Badge */}
+                  <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-border/60">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {rec.caseNumber ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-mono">
+                            قضية رقم: {rec.caseNumber}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground">
+                            بدون رقم قضية
+                          </span>
                         )}
-                        <div className="text-xs text-muted-foreground font-medium">رقم الصك</div>
-                        <h3 className="font-bold text-base font-mono">{rec.judgmentNumber}</h3>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Gavel className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-muted-foreground block leading-tight font-medium">رقم الصك</span>
+                          <span className="font-bold text-base font-mono text-foreground">{rec.judgmentNumber}</span>
+                        </div>
                       </div>
                     </div>
 
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shrink-0 border shadow-xs ${
                         isFinal
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                          : 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                          : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
                       }`}
                     >
                       {isFinal ? (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
-                        <FileText className="w-3.5 h-3.5" />
+                        <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       )}
                       {isFinal ? 'حكم نهائي' : 'حكم ابتدائي'}
                     </span>
                   </div>
 
-                  {/* Details Grid */}
-                  <div className="space-y-2 text-xs py-2 border-y border-border/50 my-3">
+                  {/* Structured Details List */}
+                  <div className="space-y-2.5 text-xs">
+                    {/* Court */}
                     {rec.court && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Scale className="w-3.5 h-3.5 shrink-0" />
-                        <span className="font-semibold text-foreground">المحكمة:</span>
-                        <span className="truncate">{rec.court}</span>
+                      <div className="flex items-center gap-2 text-muted-foreground bg-muted/30 p-2 rounded-lg border border-border/30">
+                        <Scale className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <span className="font-semibold text-foreground shrink-0">المحكمة المختصة:</span>
+                        <span className="font-medium text-foreground truncate">{rec.court}</span>
                       </div>
                     )}
 
+                    {/* Parties (Plaintiff & Defendant) */}
                     {(rec.plaintiff || rec.defendant) && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <User className="w-3.5 h-3.5 shrink-0" />
-                        <span className="font-semibold text-foreground">الأطراف:</span>
-                        <span className="truncate">
-                          {rec.plaintiff || '—'} {rec.defendant ? `ضد ${rec.defendant}` : ''}
-                        </span>
-                      </div>
-                    )}
-
-                    {rec.assignedLawyer && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                        <span className="font-semibold text-foreground">المحامي المكلف:</span>
-                        <span className="truncate">{rec.assignedLawyer}</span>
-                      </div>
-                    )}
-
-                    {rec.judgmentDate && (
-                      <div className="flex items-start gap-2 text-muted-foreground">
-                        <CalendarIcon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-foreground">تاريخ الحكم:</span>
-                            <span className="font-mono">{rec.judgmentDate}</span>
-                          </div>
-                          {getArabicDayName({ sessionDateHijri: rec.judgmentDate }) && (
-                            <span className="text-xs text-primary/80 font-medium pr-0.5">
-                              {getArabicDayName({ sessionDateHijri: rec.judgmentDate })}
-                            </span>
-                          )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="flex items-center gap-1.5 bg-background p-2 rounded-lg border border-border/50">
+                          <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span className="text-[11px] font-semibold text-muted-foreground shrink-0">المدعي:</span>
+                          <span className="font-medium text-foreground truncate">{rec.plaintiff || '—'}</span>
                         </div>
+
+                        <div className="flex items-center gap-1.5 bg-background p-2 rounded-lg border border-border/50">
+                          <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-[11px] font-semibold text-muted-foreground shrink-0">المدعى عليه:</span>
+                          <span className="font-medium text-foreground truncate">{rec.defendant || '—'}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Assigned Lawyer */}
+                    {rec.assignedLawyer && (
+                      <div className="flex items-center gap-2 text-muted-foreground bg-background p-2 rounded-lg border border-border/50">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-semibold text-foreground shrink-0">المحامي المكلف:</span>
+                        <span className="font-medium text-foreground truncate">{rec.assignedLawyer}</span>
+                      </div>
+                    )}
+
+                    {/* Judgment Date & Day */}
+                    {rec.judgmentDate && (
+                      <div className="flex items-center justify-between gap-2 text-muted-foreground bg-background p-2 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span className="font-semibold text-foreground">تاريخ الحكم:</span>
+                          <span className="font-mono text-foreground dir-ltr font-bold">{rec.judgmentDate}</span>
+                        </div>
+                        {dayName && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium text-[11px] border border-emerald-500/20">
+                            {dayName}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Summary */}
+                  {/* Summary Box */}
                   {rec.summary && (
-                    <div className="mt-2 bg-muted/40 p-2.5 rounded-lg border border-border/40 text-xs text-muted-foreground leading-relaxed">
-                      <span className="font-semibold text-foreground block mb-0.5">ملخص الحكم:</span>
-                      {rec.summary}
+                    <div className="mt-3 bg-muted/40 p-3 rounded-xl border border-border/60 text-xs text-muted-foreground leading-relaxed">
+                      <span className="font-bold text-foreground block mb-1 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-primary" />
+                        ملخص الحكم:
+                      </span>
+                      <p className="text-foreground/90 whitespace-pre-wrap">{rec.summary}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-2 mt-4 pt-2">
+                <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border/40">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => handleOpenEdit(rec)}
-                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-8 gap-1.5 text-xs text-foreground border-border hover:bg-muted"
                     data-testid={`button-edit-judgment-${rec.id}`}
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <Edit3 className="w-3.5 h-3.5 text-primary" />
                     تعديل
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => setDeleteTarget(rec)}
-                    className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="h-8 gap-1.5 text-xs text-destructive border-destructive/20 hover:bg-destructive/10 hover:border-destructive/30"
                     data-testid={`button-delete-judgment-${rec.id}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
