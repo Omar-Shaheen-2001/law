@@ -33,65 +33,57 @@ function normalizeJudgmentType(val: string): "نهائي" | "ابتدائي" {
 }
 
 /**
- * Maps a raw row to a JudgmentRecord.
- * Primary: Uses canonical 10-column index positions (Col A = caseNumber, Col I = isFavorable).
- * Fallback: Header name lookup if header is available.
+ * Maps a raw row from Google Sheets to a JudgmentRecord.
+ * Automatically detects whether the row is in the legacy 9-column layout
+ * or the canonical 10-column layout (with caseNumber at Col A).
  */
-function rowToRecord(id: number, values: string[], headers: string[]): JudgmentRecord {
-  // If headers contains "رقم القضية", use header name lookup
-  const caseNumIdx = headers.indexOf("رقم القضية");
-  const courtIdx = headers.indexOf("المحكمة المختصة");
-  const resultIdx = headers.indexOf("الحكم") !== -1 ? headers.indexOf("الحكم") : headers.indexOf("هل الحكم لصالح العميل");
+function rowToRecord(id: number, values: string[]): JudgmentRecord {
+  const isJudgmentType = (v?: string) => {
+    const t = (v || "").trim();
+    return t === "نهائي" || t === "ابتدائي" || t === "نعم" || t === "لا";
+  };
 
-  if (caseNumIdx !== -1) {
+  // Legacy 9-column row detection:
+  // In legacy rows, values[7] is the judgment result ("نهائي"/"ابتدائي"/"نعم"/"لا"),
+  // values[8] is NOT a judgment result, and total length is <= 9.
+  const isLegacy9ColRow =
+    isJudgmentType(values[7]) &&
+    !isJudgmentType(values[8]) &&
+    values.length <= 9 &&
+    !/^\d+$/.test((values[0] || "").trim());
+
+  if (isLegacy9ColRow) {
     return {
       id,
-      caseNumber: values[caseNumIdx] || "",
-      court: courtIdx !== -1 ? (values[courtIdx] || "") : (values[1] || ""),
-      plaintiff: headers.indexOf("المدعي") !== -1 ? (values[headers.indexOf("المدعي")] || "") : (values[2] || ""),
-      defendant: headers.indexOf("المدعى عليه") !== -1 ? (values[headers.indexOf("المدعى عليه")] || "") : (values[3] || ""),
-      assignedLawyer: headers.indexOf("المحامي المكلف") !== -1 ? (values[headers.indexOf("المحامي المكلف")] || "") : (values[4] || ""),
-      judgmentNumber: headers.indexOf("رقم الصك") !== -1 ? (values[headers.indexOf("رقم الصك")] || "") : (values[5] || ""),
-      judgmentDate: headers.indexOf("تاريخ الحكم") !== -1 ? (values[headers.indexOf("تاريخ الحكم")] || "") : (values[6] || ""),
-      summary: headers.indexOf("ملخص الحكم") !== -1 ? (values[headers.indexOf("ملخص الحكم")] || "") : (values[7] || ""),
-      isFavorable: normalizeJudgmentType(resultIdx !== -1 ? (values[resultIdx] || "") : (values[8] || "")),
-      createdAt: headers.indexOf("تاريخ الإنشاء") !== -1 ? (values[headers.indexOf("تاريخ الإنشاء")] || "") : (values[9] || new Date().toISOString()),
+      caseNumber: "",
+      court: values[0] || "",
+      plaintiff: values[1] || "",
+      defendant: values[2] || "",
+      assignedLawyer: values[3] || "",
+      judgmentNumber: values[4] || "",
+      judgmentDate: values[5] || "",
+      summary: values[6] || "",
+      isFavorable: normalizeJudgmentType(values[7]),
+      createdAt: values[8] || new Date().toISOString(),
     };
   }
 
-  // Canonical 10-column layout: Col A (0) = caseNumber, Col B (1) = court, ..., Col I (8) = isFavorable
-  // Detect if row is old 9-column format (where Col A was court) vs 10-column format
-  const is10ColRow = values.length >= 10 || /^\d+/.test(values[0]?.trim() || "");
-
-  if (is10ColRow) {
-    return {
-      id,
-      caseNumber: values[0] || "",
-      court: values[1] || "",
-      plaintiff: values[2] || "",
-      defendant: values[3] || "",
-      assignedLawyer: values[4] || "",
-      judgmentNumber: values[5] || "",
-      judgmentDate: values[6] || "",
-      summary: values[7] || "",
-      isFavorable: normalizeJudgmentType(values[8]),
-      createdAt: values[9] || new Date().toISOString(),
-    };
-  }
-
-  // Legacy 9-column format (no caseNumber)
+  // Canonical 10-column layout:
+  // Col A (0) = caseNumber, Col B (1) = court, Col C (2) = plaintiff, Col D (3) = defendant,
+  // Col E (4) = assignedLawyer, Col F (5) = judgmentNumber, Col G (6) = judgmentDate,
+  // Col H (7) = summary, Col I (8) = isFavorable, Col J (9) = createdAt
   return {
     id,
-    caseNumber: "",
-    court: values[0] || "",
-    plaintiff: values[1] || "",
-    defendant: values[2] || "",
-    assignedLawyer: values[3] || "",
-    judgmentNumber: values[4] || "",
-    judgmentDate: values[5] || "",
-    summary: values[6] || "",
-    isFavorable: normalizeJudgmentType(values[7]),
-    createdAt: values[8] || new Date().toISOString(),
+    caseNumber: values[0] || "",
+    court: values[1] || "",
+    plaintiff: values[2] || "",
+    defendant: values[3] || "",
+    assignedLawyer: values[4] || "",
+    judgmentNumber: values[5] || "",
+    judgmentDate: values[6] || "",
+    summary: values[7] || "",
+    isFavorable: normalizeJudgmentType(values[8]),
+    createdAt: values[9] || new Date().toISOString(),
   };
 }
 
@@ -128,8 +120,8 @@ router.get("/judgments", attachAuthUser, requireAuth, async (req, res) => {
   try {
     await ensureJudgmentSheetReady();
     const forceRefresh = req.query.refresh === "true";
-    const { headers, rows } = await listJudgmentRowsWithHeaders(forceRefresh);
-    const records = rows.map(({ id, values }) => rowToRecord(id, values, headers));
+    const { rows } = await listJudgmentRowsWithHeaders(forceRefresh);
+    const records = rows.map(({ id, values }) => rowToRecord(id, values));
     res.json(records);
   } catch (err) {
     logger.error({ err }, "Failed to list Judgment records");
@@ -149,13 +141,13 @@ router.get("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
   }
   try {
     await ensureJudgmentSheetReady();
-    const { headers, rows } = await listJudgmentRowsWithHeaders();
+    const { rows } = await listJudgmentRowsWithHeaders();
     const match = rows.find((r) => r.id === id);
     if (!match) {
       res.status(404).json({ error: "الحكم غير موجود." });
       return;
     }
-    res.json(rowToRecord(match.id, match.values, headers));
+    res.json(rowToRecord(match.id, match.values));
   } catch (err) {
     logger.error({ err }, "Failed to get Judgment record");
     res.status(500).json({ error: "فشل تحميل بيانات الحكم." });
@@ -208,13 +200,13 @@ router.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
   const body = req.body as Partial<JudgmentRecord>;
   try {
     await ensureJudgmentSheetReady();
-    const { headers, rows } = await listJudgmentRowsWithHeaders();
+    const { rows } = await listJudgmentRowsWithHeaders();
     const existing = rows.find((r) => r.id === id);
     if (!existing) {
       res.status(404).json({ error: "الحكم غير موجود." });
       return;
     }
-    const existingRecord = rowToRecord(id, existing.values, headers);
+    const existingRecord = rowToRecord(id, existing.values);
     const updatedPayload: Omit<JudgmentRecord, "id"> = {
       caseNumber: body.caseNumber !== undefined ? body.caseNumber.trim() : existingRecord.caseNumber,
       court: body.court !== undefined ? body.court.trim() : existingRecord.court,
