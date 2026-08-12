@@ -80,6 +80,8 @@ async function getJudgmentSheetId(): Promise<number> {
 
 /** Ensures the "Judgment" sheet tab exists with the correct header row and text formatting. */
 export async function ensureJudgmentSheetReady(): Promise<void> {
+  if (isJudgmentSheetReadyCache) return;
+
   try {
     const sheets = getClient();
     const spreadsheet = await sheets.spreadsheets.get({
@@ -102,7 +104,7 @@ export async function ensureJudgmentSheetReady(): Promise<void> {
       judgmentSheetIdCache = existing.properties?.sheetId ?? null;
     }
 
-    // 1. Ensure Header row 1 is always updated to JUDGMENT_SHEET_COLUMNS
+    // 1. Ensure Header row 1 is updated to JUDGMENT_SHEET_COLUMNS
     await sheets.spreadsheets.values.update({
       spreadsheetId: env.googleSpreadsheetId,
       range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}1`,
@@ -170,38 +172,6 @@ export async function ensureJudgmentSheetReady(): Promise<void> {
           ],
         },
       });
-    }
-
-    // 3. One-time fix for any row that was accidentally shifted by the previous bug
-    // (i.e. row[0] is empty, but row[1] contains numbers like a case number e.g. "44109283")
-    const dataRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: env.googleSpreadsheetId,
-      range: `${JUDGMENT_SHEET_NAME}!A2:${COL_LAST}`,
-    });
-    const dataRows = (dataRes.data.values ?? []) as string[][];
-    const repairUpdates: { range: string; values: string[][] }[] = [];
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      if (row.length > 1 && (row[0] === undefined || row[0] === "") && /^\d+/.test(row[1]?.trim() || "")) {
-        const rowNum = i + 2;
-        const repairedRow = [...row];
-        repairedRow.shift(); // remove leading empty string, restoring caseNumber to Col A
-        while (repairedRow.length < JUDGMENT_COLS) repairedRow.push("");
-        repairUpdates.push({
-          range: `${JUDGMENT_SHEET_NAME}!A${rowNum}:${COL_LAST}${rowNum}`,
-          values: [repairedRow],
-        });
-      }
-    }
-
-    if (repairUpdates.length > 0) {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: env.googleSpreadsheetId,
-        requestBody: { valueInputOption: "RAW", data: repairUpdates },
-      });
-      logger.info({ count: repairUpdates.length }, "Repaired shifted judgment rows in Google Sheets");
-      invalidateJudgmentCache();
     }
 
     isJudgmentSheetReadyCache = true;
