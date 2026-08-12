@@ -35,6 +35,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export interface JudgmentRecord {
   id: number;
+  caseNumber?: string;
   court: string;
   plaintiff: string;
   defendant: string;
@@ -42,7 +43,7 @@ export interface JudgmentRecord {
   judgmentNumber: string;
   judgmentDate: string;
   summary: string;
-  isFavorable: 'نعم' | 'لا' | string;
+  isFavorable: 'نهائي' | 'ابتدائي' | 'نعم' | 'لا' | string;
   createdAt: string;
 }
 
@@ -53,12 +54,13 @@ export default function JudgmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterResult, setFilterResult] = useState<'all' | 'نعم' | 'لا'>('all');
+  const [filterResult, setFilterResult] = useState<'all' | 'نهائي' | 'ابتدائي'>('all');
   const [isOpen, setIsOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<JudgmentRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<JudgmentRecord | null>(null);
 
   // Form State
+  const [caseNumber, setCaseNumber] = useState('');
   const [court, setCourt] = useState('');
   const [plaintiff, setPlaintiff] = useState('');
   const [defendant, setDefendant] = useState('');
@@ -66,7 +68,7 @@ export default function JudgmentsPage() {
   const [judgmentNumber, setJudgmentNumber] = useState('');
   const [judgmentDate, setJudgmentDate] = useState('');
   const [summary, setSummary] = useState('');
-  const [isFavorable, setIsFavorable] = useState<'نعم' | 'لا'>('نعم');
+  const [isFavorable, setIsFavorable] = useState<'نهائي' | 'ابتدائي'>('نهائي');
 
   // Load Judgments data
   const loadRecords = useCallback(async (isManualRefresh = false) => {
@@ -98,6 +100,7 @@ export default function JudgmentsPage() {
   // Open modal for Create
   const handleOpenCreate = () => {
     setEditingRecord(null);
+    setCaseNumber('');
     setCourt('');
     setPlaintiff('');
     setDefendant('');
@@ -105,13 +108,14 @@ export default function JudgmentsPage() {
     setJudgmentNumber('');
     setJudgmentDate('');
     setSummary('');
-    setIsFavorable('نعم');
+    setIsFavorable('نهائي');
     setIsOpen(true);
   };
 
   // Open modal for Edit
   const handleOpenEdit = (rec: JudgmentRecord) => {
     setEditingRecord(rec);
+    setCaseNumber(rec.caseNumber || '');
     setCourt(rec.court || '');
     setPlaintiff(rec.plaintiff || '');
     setDefendant(rec.defendant || '');
@@ -119,7 +123,7 @@ export default function JudgmentsPage() {
     setJudgmentNumber(rec.judgmentNumber || '');
     setJudgmentDate(rec.judgmentDate || '');
     setSummary(rec.summary || '');
-    setIsFavorable(rec.isFavorable === 'لا' ? 'لا' : 'نعم');
+    setIsFavorable(rec.isFavorable === 'ابتدائي' || rec.isFavorable === 'لا' ? 'ابتدائي' : 'نهائي');
     setIsOpen(true);
   };
 
@@ -138,6 +142,7 @@ export default function JudgmentsPage() {
     setIsSaving(true);
     try {
       const payload = {
+        caseNumber: caseNumber.trim(),
         court: court.trim(),
         plaintiff: plaintiff.trim(),
         defendant: defendant.trim(),
@@ -223,6 +228,7 @@ export default function JudgmentsPage() {
   // Filtering
   const filteredRecords = records.filter((r) => {
     const matchesSearch =
+      r.caseNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.judgmentNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.court?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.plaintiff?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -230,13 +236,17 @@ export default function JudgmentsPage() {
       r.assignedLawyer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.summary?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesFilter = filterResult === 'all' || r.isFavorable === filterResult;
+    const matchesFilter =
+      filterResult === 'all' ||
+      r.isFavorable === filterResult ||
+      (filterResult === 'نهائي' && r.isFavorable === 'نعم') ||
+      (filterResult === 'ابتدائي' && r.isFavorable === 'لا');
 
     return matchesSearch && matchesFilter;
   });
 
-  const favorableCount = records.filter((r) => r.isFavorable === 'نعم').length;
-  const unfavorableCount = records.filter((r) => r.isFavorable === 'لا').length;
+  const favorableCount = records.filter((r) => r.isFavorable === 'نهائي' || r.isFavorable === 'نعم').length;
+  const unfavorableCount = records.filter((r) => r.isFavorable === 'ابتدائي' || r.isFavorable === 'لا').length;
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -248,7 +258,7 @@ export default function JudgmentsPage() {
             <h1 className="text-2xl font-bold tracking-tight">الأحكام القضائية</h1>
           </div>
           <p className="text-muted-foreground text-sm mr-3">
-            سجل وتوثيق الأحكام والقرارات القضائية ومتابعة نتائجها لصالح العميل
+            سجل وتوثيق الأحكام والقرارات القضائية ومتابعة نتائجها النهائية والابتدائية
           </p>
         </div>
 
@@ -291,7 +301,7 @@ export default function JudgmentsPage() {
 
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">لصالح العميل (نهائية)</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">أحكام نهائية</p>
             <p className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-300">{favorableCount}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
@@ -299,13 +309,13 @@ export default function JudgmentsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between shadow-sm">
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">ليست لصالح العميل / متبقية</p>
-            <p className="text-2xl font-bold font-mono text-amber-700 dark:text-amber-300">{unfavorableCount}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">أحكام ابتدائية</p>
+            <p className="text-2xl font-bold font-mono text-blue-700 dark:text-blue-300">{unfavorableCount}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center">
-            <XCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center">
+            <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
         </div>
       </div>
@@ -315,7 +325,7 @@ export default function JudgmentsPage() {
         <div className="relative flex-1 min-w-[260px]">
           <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="البحث برقم الصك، المحكمة، المدعي، المدعى عليه، أو المحامي..."
+            placeholder="البحث برقم القضية، رقم الصك، المحكمة، المدعي، المدعى عليه..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pr-9 h-10 bg-card border-border text-sm"
@@ -335,24 +345,24 @@ export default function JudgmentsPage() {
             الكل ({records.length})
           </button>
           <button
-            onClick={() => setFilterResult('نعم')}
+            onClick={() => setFilterResult('نهائي')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filterResult === 'نعم'
+              filterResult === 'نهائي'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            لصالح العميل ({favorableCount})
+            أحكام نهائية ({favorableCount})
           </button>
           <button
-            onClick={() => setFilterResult('لا')}
+            onClick={() => setFilterResult('ابتدائي')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filterResult === 'لا'
-                ? 'bg-amber-600 text-white shadow-sm'
+              filterResult === 'ابتدائي'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            ليست لصالح العميل ({unfavorableCount})
+            أحكام ابتدائية ({unfavorableCount})
           </button>
         </div>
       </div>
@@ -371,7 +381,7 @@ export default function JudgmentsPage() {
       ) : filteredRecords.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in-up fade-in-up-delay-2">
           {filteredRecords.map((rec) => {
-            const isFavorableBool = rec.isFavorable === 'نعم';
+            const isFinal = rec.isFavorable === 'نهائي' || rec.isFavorable === 'نعم';
 
             return (
               <div
@@ -386,6 +396,9 @@ export default function JudgmentsPage() {
                         <Gavel className="w-4 h-4 text-primary" />
                       </div>
                       <div>
+                        {rec.caseNumber && (
+                          <div className="text-xs text-primary font-semibold">قضية رقم: {rec.caseNumber}</div>
+                        )}
                         <div className="text-xs text-muted-foreground font-medium">رقم الصك</div>
                         <h3 className="font-bold text-base font-mono">{rec.judgmentNumber}</h3>
                       </div>
@@ -393,17 +406,17 @@ export default function JudgmentsPage() {
 
                     <span
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                        isFavorableBool
+                        isFinal
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                          : 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30'
                       }`}
                     >
-                      {isFavorableBool ? (
+                      {isFinal ? (
                         <CheckCircle2 className="w-3.5 h-3.5" />
                       ) : (
-                        <XCircle className="w-3.5 h-3.5" />
+                        <FileText className="w-3.5 h-3.5" />
                       )}
-                      {isFavorableBool ? 'لصالح العميل' : 'ليست لصالح العميل'}
+                      {isFinal ? 'حكم نهائي' : 'حكم ابتدائي'}
                     </span>
                   </div>
 
@@ -522,6 +535,20 @@ export default function JudgmentsPage() {
           <form onSubmit={handleSave} className="space-y-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
+                <Label htmlFor="caseNumber" className="text-xs font-semibold">
+                  رقم القضية
+                </Label>
+                <Input
+                  id="caseNumber"
+                  value={caseNumber}
+                  onChange={(e) => setCaseNumber(e.target.value)}
+                  placeholder="مثال: 44109283"
+                  className="font-mono text-sm"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-1.5">
                 <Label htmlFor="judgmentNumber" className="text-xs font-semibold">
                   رقم الصك <span className="text-destructive">*</span>
                 </Label>
@@ -535,7 +562,9 @@ export default function JudgmentsPage() {
                   required
                 />
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="court" className="text-xs font-semibold">
                   المحكمة المختصة
@@ -545,6 +574,19 @@ export default function JudgmentsPage() {
                   value={court}
                   onChange={(e) => setCourt(e.target.value)}
                   placeholder="مثال: المحكمة العامة بالرياض"
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="assignedLawyer" className="text-xs font-semibold">
+                  المحامي المكلف
+                </Label>
+                <Input
+                  id="assignedLawyer"
+                  value={assignedLawyer}
+                  onChange={(e) => setAssignedLawyer(e.target.value)}
+                  placeholder="اسم المحامي المتابع"
                   className="text-sm"
                 />
               </div>
@@ -580,19 +622,6 @@ export default function JudgmentsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="assignedLawyer" className="text-xs font-semibold">
-                  المحامي المكلف
-                </Label>
-                <Input
-                  id="assignedLawyer"
-                  value={assignedLawyer}
-                  onChange={(e) => setAssignedLawyer(e.target.value)}
-                  placeholder="اسم المحامي المتابع"
-                  className="text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
                 <Label htmlFor="judgmentDate" className="text-xs font-semibold">
                   تاريخ الحكم (هجري/ميلادي)
                 </Label>
@@ -605,21 +634,21 @@ export default function JudgmentsPage() {
                   dir="ltr"
                 />
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">
-                هل الحكم لصالح العميل؟
-              </Label>
-              <Select value={isFavorable} onValueChange={(val) => setIsFavorable(val as 'نعم' | 'لا')}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="اختر نتيجة الحكم" />
-                </SelectTrigger>
-                <SelectContent dir="rtl">
-                  <SelectItem value="نعم">نعم (لصالح العميل)</SelectItem>
-                  <SelectItem value="لا">لا (ليست لصالح العميل / متبقية)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  الحكم
+                </Label>
+                <Select value={isFavorable} onValueChange={(val) => setIsFavorable(val as 'نهائي' | 'ابتدائي')}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue placeholder="اختر نوع الحكم" />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    <SelectItem value="نهائي">نهائي</SelectItem>
+                    <SelectItem value="ابتدائي">ابتدائي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-1.5">

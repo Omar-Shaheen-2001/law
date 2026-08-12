@@ -40307,6 +40307,7 @@ async function deletePoaRow(id) {
 var import_googleapis3 = require("googleapis");
 var JUDGMENT_SHEET_NAME = "Judgment";
 var JUDGMENT_SHEET_COLUMNS = [
+  "\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629",
   "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629",
   "\u0627\u0644\u0645\u062F\u0639\u064A",
   "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647",
@@ -40314,7 +40315,7 @@ var JUDGMENT_SHEET_COLUMNS = [
   "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643",
   "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645",
   "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645",
-  "\u0647\u0644 \u0627\u0644\u062D\u0643\u0645 \u0644\u0635\u0627\u0644\u062D \u0627\u0644\u0639\u0645\u064A\u0644",
+  "\u0627\u0644\u062D\u0643\u0645",
   "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"
 ];
 var JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length;
@@ -40797,11 +40798,14 @@ async function getDashboardStats() {
   let favorableJudgments = 0;
   let unfavorableJudgments = 0;
   for (const row of judgmentRows) {
-    const isFavorableVal = (row.values[7] || "").trim();
-    if (isFavorableVal === "\u0646\u0639\u0645") {
+    const rawVal = row.values.length >= 10 ? row.values[8] : row.values[7];
+    const val = (rawVal || "").trim();
+    if (val === "\u0646\u0647\u0627\u0626\u064A" || val === "\u0646\u0639\u0645") {
       favorableJudgments += 1;
-    } else {
+    } else if (val === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || val === "\u0644\u0627") {
       unfavorableJudgments += 1;
+    } else {
+      favorableJudgments += 1;
     }
   }
   return {
@@ -57785,9 +57789,30 @@ var poa_default = router9;
 // src/routes/judgments.ts
 var import_express10 = __toESM(require_express2(), 1);
 var router10 = (0, import_express10.Router)();
+function normalizeJudgmentType(val) {
+  const trimmed = (val || "").trim();
+  if (trimmed === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || trimmed === "\u0644\u0627") return "\u0627\u0628\u062A\u062F\u0627\u0626\u064A";
+  return "\u0646\u0647\u0627\u0626\u064A";
+}
 function rowToRecord2(id, values) {
+  if (values.length >= 10) {
+    return {
+      id,
+      caseNumber: values[0] || "",
+      court: values[1] || "",
+      plaintiff: values[2] || "",
+      defendant: values[3] || "",
+      assignedLawyer: values[4] || "",
+      judgmentNumber: values[5] || "",
+      judgmentDate: values[6] || "",
+      summary: values[7] || "",
+      isFavorable: normalizeJudgmentType(values[8]),
+      createdAt: values[9] || (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
   return {
     id,
+    caseNumber: "",
     court: values[0] || "",
     plaintiff: values[1] || "",
     defendant: values[2] || "",
@@ -57795,12 +57820,13 @@ function rowToRecord2(id, values) {
     judgmentNumber: values[4] || "",
     judgmentDate: values[5] || "",
     summary: values[6] || "",
-    isFavorable: values[7] || "\u0646\u0639\u0645",
+    isFavorable: normalizeJudgmentType(values[7]),
     createdAt: values[8] || (/* @__PURE__ */ new Date()).toISOString()
   };
 }
 function recordToRow2(record) {
   return [
+    record.caseNumber || "",
     record.court || "",
     record.plaintiff || "",
     record.defendant || "",
@@ -57808,7 +57834,7 @@ function recordToRow2(record) {
     record.judgmentNumber || "",
     record.judgmentDate || "",
     record.summary || "",
-    record.isFavorable || "\u0646\u0639\u0645",
+    normalizeJudgmentType(record.isFavorable),
     record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
   ];
 }
@@ -57853,6 +57879,7 @@ router10.post("/judgments", attachAuthUser, requireAuth, async (req, res) => {
   try {
     await ensureJudgmentSheetReady();
     const recordPayload = {
+      caseNumber: body.caseNumber?.trim() || "",
       court: body.court?.trim() || "",
       plaintiff: body.plaintiff?.trim() || "",
       defendant: body.defendant?.trim() || "",
@@ -57860,7 +57887,7 @@ router10.post("/judgments", attachAuthUser, requireAuth, async (req, res) => {
       judgmentNumber: body.judgmentNumber.trim(),
       judgmentDate: body.judgmentDate?.trim() || "",
       summary: body.summary?.trim() || "",
-      isFavorable: body.isFavorable === "\u0644\u0627" ? "\u0644\u0627" : "\u0646\u0639\u0645",
+      isFavorable: normalizeJudgmentType(body.isFavorable || "\u0646\u0647\u0627\u0626\u064A"),
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     const rowId = await appendJudgmentRow(recordToRow2(recordPayload));
@@ -57888,6 +57915,7 @@ router10.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => 
     }
     const existingRecord = rowToRecord2(id, existing.values);
     const updatedPayload = {
+      caseNumber: body.caseNumber !== void 0 ? body.caseNumber.trim() : existingRecord.caseNumber,
       court: body.court !== void 0 ? body.court.trim() : existingRecord.court,
       plaintiff: body.plaintiff !== void 0 ? body.plaintiff.trim() : existingRecord.plaintiff,
       defendant: body.defendant !== void 0 ? body.defendant.trim() : existingRecord.defendant,
@@ -57895,7 +57923,7 @@ router10.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => 
       judgmentNumber: body.judgmentNumber !== void 0 ? body.judgmentNumber.trim() : existingRecord.judgmentNumber,
       judgmentDate: body.judgmentDate !== void 0 ? body.judgmentDate.trim() : existingRecord.judgmentDate,
       summary: body.summary !== void 0 ? body.summary.trim() : existingRecord.summary,
-      isFavorable: body.isFavorable !== void 0 ? body.isFavorable === "\u0644\u0627" ? "\u0644\u0627" : "\u0646\u0639\u0645" : existingRecord.isFavorable,
+      isFavorable: body.isFavorable !== void 0 ? normalizeJudgmentType(body.isFavorable) : existingRecord.isFavorable,
       createdAt: existingRecord.createdAt
     };
     await updateJudgmentRow(id, recordToRow2(updatedPayload));

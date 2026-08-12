@@ -61,7 +61,7 @@ const stats = [
   },
   {
     key: 'favorableJudgments',
-    label: 'أحكام نهائية (لصالح العميل)',
+    label: 'أحكام نهائية',
     icon: Gavel,
     gradient: 'from-emerald-600/15 to-emerald-700/5',
     iconBg: 'bg-emerald-600/20',
@@ -72,13 +72,13 @@ const stats = [
   },
   {
     key: 'unfavorableJudgments',
-    label: 'أحكام متبقية (ليست لصالح العميل)',
+    label: 'أحكام ابتدائية',
     icon: XCircle,
-    gradient: 'from-amber-600/15 to-amber-700/5',
-    iconBg: 'bg-amber-600/20',
-    iconColor: 'text-amber-600 dark:text-amber-400',
-    borderColor: 'border-amber-600/30',
-    dotColor: 'bg-amber-600',
+    gradient: 'from-blue-600/15 to-blue-700/5',
+    iconBg: 'bg-blue-600/20',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    borderColor: 'border-blue-600/30',
+    dotColor: 'bg-blue-600',
     href: '/judgments',
   },
 ] as const;

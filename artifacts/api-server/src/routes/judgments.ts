@@ -13,6 +13,7 @@ const router: IRouter = Router();
 
 export interface JudgmentRecord {
   id: number;
+  caseNumber: string;
   court: string;
   plaintiff: string;
   defendant: string;
@@ -20,13 +21,35 @@ export interface JudgmentRecord {
   judgmentNumber: string;
   judgmentDate: string;
   summary: string;
-  isFavorable: "نعم" | "لا" | string;
+  isFavorable: "نهائي" | "ابتدائي" | string;
   createdAt: string;
 }
 
+function normalizeJudgmentType(val: string): "نهائي" | "ابتدائي" {
+  const trimmed = (val || "").trim();
+  if (trimmed === "ابتدائي" || trimmed === "لا") return "ابتدائي";
+  return "نهائي";
+}
+
 function rowToRecord(id: number, values: string[]): JudgmentRecord {
+  if (values.length >= 10) {
+    return {
+      id,
+      caseNumber: values[0] || "",
+      court: values[1] || "",
+      plaintiff: values[2] || "",
+      defendant: values[3] || "",
+      assignedLawyer: values[4] || "",
+      judgmentNumber: values[5] || "",
+      judgmentDate: values[6] || "",
+      summary: values[7] || "",
+      isFavorable: normalizeJudgmentType(values[8]),
+      createdAt: values[9] || new Date().toISOString(),
+    };
+  }
   return {
     id,
+    caseNumber: "",
     court: values[0] || "",
     plaintiff: values[1] || "",
     defendant: values[2] || "",
@@ -34,13 +57,14 @@ function rowToRecord(id: number, values: string[]): JudgmentRecord {
     judgmentNumber: values[4] || "",
     judgmentDate: values[5] || "",
     summary: values[6] || "",
-    isFavorable: (values[7] || "نعم") as "نعم" | "لا",
+    isFavorable: normalizeJudgmentType(values[7]),
     createdAt: values[8] || new Date().toISOString(),
   };
 }
 
 function recordToRow(record: Omit<JudgmentRecord, "id">): string[] {
   return [
+    record.caseNumber || "",
     record.court || "",
     record.plaintiff || "",
     record.defendant || "",
@@ -48,7 +72,7 @@ function recordToRow(record: Omit<JudgmentRecord, "id">): string[] {
     record.judgmentNumber || "",
     record.judgmentDate || "",
     record.summary || "",
-    record.isFavorable || "نعم",
+    normalizeJudgmentType(record.isFavorable),
     record.createdAt || new Date().toISOString(),
   ];
 }
@@ -108,6 +132,7 @@ router.post("/judgments", attachAuthUser, requireAuth, async (req, res) => {
   try {
     await ensureJudgmentSheetReady();
     const recordPayload: Omit<JudgmentRecord, "id"> = {
+      caseNumber: body.caseNumber?.trim() || "",
       court: body.court?.trim() || "",
       plaintiff: body.plaintiff?.trim() || "",
       defendant: body.defendant?.trim() || "",
@@ -115,7 +140,7 @@ router.post("/judgments", attachAuthUser, requireAuth, async (req, res) => {
       judgmentNumber: body.judgmentNumber.trim(),
       judgmentDate: body.judgmentDate?.trim() || "",
       summary: body.summary?.trim() || "",
-      isFavorable: body.isFavorable === "لا" ? "لا" : "نعم",
+      isFavorable: normalizeJudgmentType(body.isFavorable || "نهائي"),
       createdAt: new Date().toISOString(),
     };
     const rowId = await appendJudgmentRow(recordToRow(recordPayload));
@@ -148,6 +173,7 @@ router.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
     }
     const existingRecord = rowToRecord(id, existing.values);
     const updatedPayload: Omit<JudgmentRecord, "id"> = {
+      caseNumber: body.caseNumber !== undefined ? body.caseNumber.trim() : existingRecord.caseNumber,
       court: body.court !== undefined ? body.court.trim() : existingRecord.court,
       plaintiff: body.plaintiff !== undefined ? body.plaintiff.trim() : existingRecord.plaintiff,
       defendant: body.defendant !== undefined ? body.defendant.trim() : existingRecord.defendant,
@@ -155,7 +181,7 @@ router.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
       judgmentNumber: body.judgmentNumber !== undefined ? body.judgmentNumber.trim() : existingRecord.judgmentNumber,
       judgmentDate: body.judgmentDate !== undefined ? body.judgmentDate.trim() : existingRecord.judgmentDate,
       summary: body.summary !== undefined ? body.summary.trim() : existingRecord.summary,
-      isFavorable: body.isFavorable !== undefined ? (body.isFavorable === "لا" ? "لا" : "نعم") : existingRecord.isFavorable,
+      isFavorable: body.isFavorable !== undefined ? normalizeJudgmentType(body.isFavorable) : existingRecord.isFavorable,
       createdAt: existingRecord.createdAt,
     };
     await updateJudgmentRow(id, recordToRow(updatedPayload));

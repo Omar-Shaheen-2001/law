@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 const JUDGMENT_SHEET_NAME = "Judgment";
 
 export const JUDGMENT_SHEET_COLUMNS = [
+  "رقم القضية",
   "المحكمة المختصة",
   "المدعي",
   "المدعى عليه",
@@ -17,12 +18,12 @@ export const JUDGMENT_SHEET_COLUMNS = [
   "رقم الصك",
   "تاريخ الحكم",
   "ملخص الحكم",
-  "هل الحكم لصالح العميل",
+  "الحكم",
   "تاريخ الإنشاء",
 ] as const;
 
-export const JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length; // 9
-const COL_LAST = String.fromCharCode("A".charCodeAt(0) + JUDGMENT_COLS - 1); // "I"
+export const JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length; // 10
+const COL_LAST = String.fromCharCode("A".charCodeAt(0) + JUDGMENT_COLS - 1); // "J"
 
 let sheetsClient: sheets_v4.Sheets | null = null;
 
