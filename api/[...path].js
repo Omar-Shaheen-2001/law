@@ -40374,14 +40374,16 @@ async function ensureJudgmentSheetReady() {
       (s) => s.properties?.title === JUDGMENT_SHEET_NAME
     );
     if (!existing) {
-      await sheets.spreadsheets.batchUpdate({
+      const addRes = await sheets.spreadsheets.batchUpdate({
         spreadsheetId: env.googleSpreadsheetId,
         requestBody: {
           requests: [{ addSheet: { properties: { title: JUDGMENT_SHEET_NAME } } }]
         }
       });
-      judgmentSheetIdCache = null;
+      judgmentSheetIdCache = addRes.data.replies?.[0]?.addSheet?.properties?.sheetId ?? null;
       logger.info(`Created sheet tab "${JUDGMENT_SHEET_NAME}"`);
+    } else {
+      judgmentSheetIdCache = existing.properties?.sheetId ?? null;
     }
     await sheets.spreadsheets.values.update({
       spreadsheetId: env.googleSpreadsheetId,
@@ -40389,48 +40391,120 @@ async function ensureJudgmentSheetReady() {
       valueInputOption: "RAW",
       requestBody: { values: [[...JUDGMENT_SHEET_COLUMNS]] }
     });
+    if (judgmentSheetIdCache !== null) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: env.googleSpreadsheetId,
+        requestBody: {
+          requests: [
+            // Row 1 (Header): Dark Navy fill, white text, bold
+            {
+              repeatCell: {
+                range: {
+                  sheetId: judgmentSheetIdCache,
+                  startRowIndex: 0,
+                  endRowIndex: 1,
+                  startColumnIndex: 0,
+                  endColumnIndex: JUDGMENT_COLS
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.1, green: 0.15, blue: 0.25 },
+                    textFormat: {
+                      foregroundColor: { red: 1, green: 1, blue: 1 },
+                      bold: true,
+                      fontSize: 10
+                    },
+                    horizontalAlignment: "CENTER",
+                    verticalAlignment: "MIDDLE"
+                  }
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+              }
+            },
+            // Rows 2..1000 (Data): White fill, BLACK text, normal
+            {
+              repeatCell: {
+                range: {
+                  sheetId: judgmentSheetIdCache,
+                  startRowIndex: 1,
+                  endRowIndex: 1e3,
+                  startColumnIndex: 0,
+                  endColumnIndex: JUDGMENT_COLS
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: {
+                      foregroundColor: { red: 0, green: 0, blue: 0 },
+                      bold: false,
+                      fontSize: 10
+                    },
+                    horizontalAlignment: "RIGHT",
+                    verticalAlignment: "MIDDLE"
+                  }
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+              }
+            }
+          ]
+        }
+      });
+    }
     isJudgmentSheetReadyCache = true;
   } catch (err) {
     isJudgmentSheetReadyCache = false;
     logger.warn({ err }, "ensureJudgmentSheetReady non-fatal warning");
   }
 }
-async function listJudgmentRows(forceRefresh = false) {
-  const now = Date.now();
-  if (!forceRefresh && judgmentDataCache !== null && now - lastJudgmentCacheTime < JUDGMENT_CACHE_TTL_MS) {
-    return judgmentDataCache;
-  }
+async function listJudgmentRowsWithHeaders(forceRefresh = false) {
   await ensureJudgmentSheetReady();
+  const now = Date.now();
+  const useCache = !forceRefresh && judgmentDataCache !== null && now - lastJudgmentCacheTime < JUDGMENT_CACHE_TTL_MS;
   try {
     const sheets = getClient3();
+    if (useCache) {
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: env.googleSpreadsheetId,
+        range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST2}1`
+      });
+      const headers2 = headerRes.data.values?.[0] ?? [...JUDGMENT_SHEET_COLUMNS];
+      return { headers: headers2, rows: judgmentDataCache };
+    }
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: env.googleSpreadsheetId,
-      range: `${JUDGMENT_SHEET_NAME}!A2:${COL_LAST2}`
+      range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST2}`
     });
-    const rows = response.data.values ?? [];
-    const result = rows.map((row, index) => ({ id: index + 2, values: row })).filter((row) => row.values.some((cell2) => cell2 !== void 0 && cell2 !== ""));
-    judgmentDataCache = result;
+    const data = response.data.values ?? [];
+    const headers = data[0] ?? [...JUDGMENT_SHEET_COLUMNS];
+    const dataRows = data.slice(1);
+    const rows = dataRows.map((row, index) => ({ id: index + 2, values: row })).filter((row) => row.values.some((cell2) => cell2 !== void 0 && cell2 !== ""));
+    judgmentDataCache = rows;
     lastJudgmentCacheTime = now;
-    return result;
+    return { headers, rows };
   } catch (err) {
     logger.warn({ err }, "Failed to fetch Judgment rows from Google Sheets, returning cached/empty");
-    return judgmentDataCache ?? [];
+    return {
+      headers: [...JUDGMENT_SHEET_COLUMNS],
+      rows: judgmentDataCache ?? []
+    };
   }
 }
 async function appendJudgmentRow(values) {
   invalidateJudgmentCache();
   const sheets = getClient3();
+  const paddedValues = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${JUDGMENT_SHEET_NAME}!A:${COL_LAST2}`,
     valueInputOption: "RAW",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [values] }
+    insertDataOption: "OVERWRITE",
+    // OVERWRITE avoids inheriting header row's white-text formatting
+    requestBody: { values: [paddedValues] }
   });
   const updatedRange = response.data.updates?.updatedRange;
   const match = updatedRange?.match(/![A-Z]+(\d+):/);
   if (match) return Number(match[1]);
-  const rows = await listJudgmentRows(true);
+  const { rows } = await listJudgmentRowsWithHeaders();
   const last = rows[rows.length - 1];
   if (!last) throw new Error("Failed to determine id of newly created Judgment row.");
   return last.id;
@@ -40438,11 +40512,12 @@ async function appendJudgmentRow(values) {
 async function updateJudgmentRow(id, values) {
   invalidateJudgmentCache();
   const sheets = getClient3();
+  const paddedValues = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${JUDGMENT_SHEET_NAME}!A${id}:${COL_LAST2}${id}`,
     valueInputOption: "RAW",
-    requestBody: { values: [values] }
+    requestBody: { values: [paddedValues] }
   });
 }
 async function deleteJudgmentRow(id) {
@@ -40772,11 +40847,11 @@ async function getDashboardStats() {
   const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
     listSessions(),
     listPoaRows(),
-    listJudgmentRows()
+    listJudgmentRowsWithHeaders()
   ]);
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
   const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
-  const judgmentRows = judgmentRes.status === "fulfilled" ? judgmentRes.value : [];
+  const judgmentResult = judgmentRes.status === "fulfilled" ? judgmentRes.value : { headers: ["\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629", "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629", "\u0627\u0644\u0645\u062F\u0639\u064A", "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647", "\u0627\u0644\u0645\u062D\u0627\u0645\u064A \u0627\u0644\u0645\u0643\u0644\u0641", "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645", "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645", "\u0627\u0644\u062D\u0643\u0645", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"], rows: [] };
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
   }
@@ -40795,14 +40870,15 @@ async function getDashboardStats() {
     else if (effective === "Upcoming") upcomingHearings += 1;
     else if (effective === "Finished") finishedHearings += 1;
   }
+  const judgmentColIdx = judgmentResult.headers.findIndex(
+    (h) => h === "\u0627\u0644\u062D\u0643\u0645" || h === "\u0647\u0644 \u0627\u0644\u062D\u0643\u0645 \u0644\u0635\u0627\u0644\u062D \u0627\u0644\u0639\u0645\u064A\u0644"
+  );
   let favorableJudgments = 0;
   let unfavorableJudgments = 0;
-  for (const row of judgmentRows) {
-    const rawVal = row.values.length >= 10 ? row.values[8] : row.values[7];
-    const val = (rawVal || "").trim();
-    if (val === "\u0646\u0647\u0627\u0626\u064A" || val === "\u0646\u0639\u0645") {
-      favorableJudgments += 1;
-    } else if (val === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || val === "\u0644\u0627") {
+  for (const row of judgmentResult.rows) {
+    const rawVal = judgmentColIdx !== -1 ? row.values[judgmentColIdx] || "" : "";
+    const val = rawVal.trim();
+    if (val === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || val === "\u0644\u0627") {
       unfavorableJudgments += 1;
     } else {
       favorableJudgments += 1;
@@ -57794,56 +57870,70 @@ function normalizeJudgmentType(val) {
   if (trimmed === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || trimmed === "\u0644\u0627") return "\u0627\u0628\u062A\u062F\u0627\u0626\u064A";
   return "\u0646\u0647\u0627\u0626\u064A";
 }
-function rowToRecord2(id, values) {
-  if (values.length >= 10) {
-    return {
-      id,
-      caseNumber: values[0] || "",
-      court: values[1] || "",
-      plaintiff: values[2] || "",
-      defendant: values[3] || "",
-      assignedLawyer: values[4] || "",
-      judgmentNumber: values[5] || "",
-      judgmentDate: values[6] || "",
-      summary: values[7] || "",
-      isFavorable: normalizeJudgmentType(values[8]),
-      createdAt: values[9] || (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
+var FIELD_KEYS = {
+  "\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629": "caseNumber",
+  "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629": "court",
+  "\u0627\u0644\u0645\u062F\u0639\u064A": "plaintiff",
+  "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647": "defendant",
+  "\u0627\u0644\u0645\u062D\u0627\u0645\u064A \u0627\u0644\u0645\u0643\u0644\u0641": "assignedLawyer",
+  "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643": "judgmentNumber",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645": "judgmentDate",
+  "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645": "summary",
+  "\u0627\u0644\u062D\u0643\u0645": "isFavorable",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621": "createdAt"
+};
+function rowToRecord2(id, values, headers) {
+  const record = {};
+  headers.forEach((header, colIdx) => {
+    const fieldKey = FIELD_KEYS[header.trim()];
+    if (fieldKey) {
+      record[fieldKey] = (values[colIdx] ?? "").trim();
+    }
+  });
   return {
     id,
-    caseNumber: "",
-    court: values[0] || "",
-    plaintiff: values[1] || "",
-    defendant: values[2] || "",
-    assignedLawyer: values[3] || "",
-    judgmentNumber: values[4] || "",
-    judgmentDate: values[5] || "",
-    summary: values[6] || "",
-    isFavorable: normalizeJudgmentType(values[7]),
-    createdAt: values[8] || (/* @__PURE__ */ new Date()).toISOString()
+    caseNumber: record.caseNumber || "",
+    court: record.court || "",
+    plaintiff: record.plaintiff || "",
+    defendant: record.defendant || "",
+    assignedLawyer: record.assignedLawyer || "",
+    judgmentNumber: record.judgmentNumber || "",
+    judgmentDate: record.judgmentDate || "",
+    summary: record.summary || "",
+    isFavorable: normalizeJudgmentType(record.isFavorable || ""),
+    createdAt: record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
   };
 }
 function recordToRow2(record) {
   return [
     record.caseNumber || "",
+    // A: رقم القضية
     record.court || "",
+    // B: المحكمة المختصة
     record.plaintiff || "",
+    // C: المدعي
     record.defendant || "",
+    // D: المدعى عليه
     record.assignedLawyer || "",
+    // E: المحامي المكلف
     record.judgmentNumber || "",
+    // F: رقم الصك
     record.judgmentDate || "",
+    // G: تاريخ الحكم
     record.summary || "",
+    // H: ملخص الحكم
     normalizeJudgmentType(record.isFavorable),
+    // I: الحكم
     record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    // J: تاريخ الإنشاء
   ];
 }
 router10.get("/judgments", attachAuthUser, requireAuth, async (req, res) => {
   try {
     await ensureJudgmentSheetReady();
     const forceRefresh = req.query.refresh === "true";
-    const rows = await listJudgmentRows(forceRefresh);
-    const records = rows.map(({ id, values }) => rowToRecord2(id, values));
+    const { headers, rows } = await listJudgmentRowsWithHeaders(forceRefresh);
+    const records = rows.map(({ id, values }) => rowToRecord2(id, values, headers));
     res.json(records);
   } catch (err) {
     logger.error({ err }, "Failed to list Judgment records");
@@ -57858,13 +57948,13 @@ router10.get("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => 
   }
   try {
     await ensureJudgmentSheetReady();
-    const rows = await listJudgmentRows();
+    const { headers, rows } = await listJudgmentRowsWithHeaders();
     const match = rows.find((r) => r.id === id);
     if (!match) {
       res.status(404).json({ error: "\u0627\u0644\u062D\u0643\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F." });
       return;
     }
-    res.json(rowToRecord2(match.id, match.values));
+    res.json(rowToRecord2(match.id, match.values, headers));
   } catch (err) {
     logger.error({ err }, "Failed to get Judgment record");
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062D\u0643\u0645." });
@@ -57907,13 +57997,13 @@ router10.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => 
   const body = req.body;
   try {
     await ensureJudgmentSheetReady();
-    const rows = await listJudgmentRows();
+    const { headers, rows } = await listJudgmentRowsWithHeaders();
     const existing = rows.find((r) => r.id === id);
     if (!existing) {
       res.status(404).json({ error: "\u0627\u0644\u062D\u0643\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F." });
       return;
     }
-    const existingRecord = rowToRecord2(id, existing.values);
+    const existingRecord = rowToRecord2(id, existing.values, headers);
     const updatedPayload = {
       caseNumber: body.caseNumber !== void 0 ? body.caseNumber.trim() : existingRecord.caseNumber,
       court: body.court !== void 0 ? body.court.trim() : existingRecord.court,
