@@ -33,29 +33,65 @@ function normalizeJudgmentType(val: string): "نهائي" | "ابتدائي" {
 }
 
 /**
- * Maps a raw row to a JudgmentRecord using the actual header row from the sheet.
- * Looks up each field by its column header name — never by index position.
- * Robust against trailing-empty-cell truncation by Google Sheets API.
+ * Maps a raw row to a JudgmentRecord.
+ * Primary: Uses canonical 10-column index positions (Col A = caseNumber, Col I = isFavorable).
+ * Fallback: Header name lookup if header is available.
  */
 function rowToRecord(id: number, values: string[], headers: string[]): JudgmentRecord {
-  const getVal = (colName: string, altName?: string): string => {
-    let idx = headers.indexOf(colName);
-    if (idx === -1 && altName) idx = headers.indexOf(altName);
-    return idx !== -1 ? (values[idx] || "") : "";
-  };
+  // If headers contains "رقم القضية", use header name lookup
+  const caseNumIdx = headers.indexOf("رقم القضية");
+  const courtIdx = headers.indexOf("المحكمة المختصة");
+  const resultIdx = headers.indexOf("الحكم") !== -1 ? headers.indexOf("الحكم") : headers.indexOf("هل الحكم لصالح العميل");
 
+  if (caseNumIdx !== -1) {
+    return {
+      id,
+      caseNumber: values[caseNumIdx] || "",
+      court: courtIdx !== -1 ? (values[courtIdx] || "") : (values[1] || ""),
+      plaintiff: headers.indexOf("المدعي") !== -1 ? (values[headers.indexOf("المدعي")] || "") : (values[2] || ""),
+      defendant: headers.indexOf("المدعى عليه") !== -1 ? (values[headers.indexOf("المدعى عليه")] || "") : (values[3] || ""),
+      assignedLawyer: headers.indexOf("المحامي المكلف") !== -1 ? (values[headers.indexOf("المحامي المكلف")] || "") : (values[4] || ""),
+      judgmentNumber: headers.indexOf("رقم الصك") !== -1 ? (values[headers.indexOf("رقم الصك")] || "") : (values[5] || ""),
+      judgmentDate: headers.indexOf("تاريخ الحكم") !== -1 ? (values[headers.indexOf("تاريخ الحكم")] || "") : (values[6] || ""),
+      summary: headers.indexOf("ملخص الحكم") !== -1 ? (values[headers.indexOf("ملخص الحكم")] || "") : (values[7] || ""),
+      isFavorable: normalizeJudgmentType(resultIdx !== -1 ? (values[resultIdx] || "") : (values[8] || "")),
+      createdAt: headers.indexOf("تاريخ الإنشاء") !== -1 ? (values[headers.indexOf("تاريخ الإنشاء")] || "") : (values[9] || new Date().toISOString()),
+    };
+  }
+
+  // Canonical 10-column layout: Col A (0) = caseNumber, Col B (1) = court, ..., Col I (8) = isFavorable
+  // Detect if row is old 9-column format (where Col A was court) vs 10-column format
+  const is10ColRow = values.length >= 10 || /^\d+/.test(values[0]?.trim() || "");
+
+  if (is10ColRow) {
+    return {
+      id,
+      caseNumber: values[0] || "",
+      court: values[1] || "",
+      plaintiff: values[2] || "",
+      defendant: values[3] || "",
+      assignedLawyer: values[4] || "",
+      judgmentNumber: values[5] || "",
+      judgmentDate: values[6] || "",
+      summary: values[7] || "",
+      isFavorable: normalizeJudgmentType(values[8]),
+      createdAt: values[9] || new Date().toISOString(),
+    };
+  }
+
+  // Legacy 9-column format (no caseNumber)
   return {
     id,
-    caseNumber: getVal("رقم القضية"),
-    court: getVal("المحكمة المختصة"),
-    plaintiff: getVal("المدعي"),
-    defendant: getVal("المدعى عليه"),
-    assignedLawyer: getVal("المحامي المكلف"),
-    judgmentNumber: getVal("رقم الصك"),
-    judgmentDate: getVal("تاريخ الحكم"),
-    summary: getVal("ملخص الحكم"),
-    isFavorable: normalizeJudgmentType(getVal("الحكم", "هل الحكم لصالح العميل")),
-    createdAt: getVal("تاريخ الإنشاء") || new Date().toISOString(),
+    caseNumber: "",
+    court: values[0] || "",
+    plaintiff: values[1] || "",
+    defendant: values[2] || "",
+    assignedLawyer: values[3] || "",
+    judgmentNumber: values[4] || "",
+    judgmentDate: values[5] || "",
+    summary: values[6] || "",
+    isFavorable: normalizeJudgmentType(values[7]),
+    createdAt: values[8] || new Date().toISOString(),
   };
 }
 

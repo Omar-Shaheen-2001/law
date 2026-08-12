@@ -80,8 +80,6 @@ async function getJudgmentSheetId(): Promise<number> {
 
 /** Ensures the "Judgment" sheet tab exists with the correct header row and text formatting. */
 export async function ensureJudgmentSheetReady(): Promise<void> {
-  if (isJudgmentSheetReadyCache) return;
-
   try {
     const sheets = getClient();
     const spreadsheet = await sheets.spreadsheets.get({
