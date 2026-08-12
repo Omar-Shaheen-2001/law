@@ -3,10 +3,11 @@ import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
 import { logger } from "../lib/logger";
 import {
   ensureJudgmentSheetReady,
-  listJudgmentRows,
+  listJudgmentRowsWithHeaders,
   appendJudgmentRow,
   updateJudgmentRow,
   deleteJudgmentRow,
+  JUDGMENT_SHEET_COLUMNS,
 } from "../services/judgment.sheets.service";
 
 const router: IRouter = Router();
@@ -31,50 +32,56 @@ function normalizeJudgmentType(val: string): "نهائي" | "ابتدائي" {
   return "نهائي";
 }
 
-function rowToRecord(id: number, values: string[]): JudgmentRecord {
-  if (values.length >= 10) {
-    return {
-      id,
-      caseNumber: values[0] || "",
-      court: values[1] || "",
-      plaintiff: values[2] || "",
-      defendant: values[3] || "",
-      assignedLawyer: values[4] || "",
-      judgmentNumber: values[5] || "",
-      judgmentDate: values[6] || "",
-      summary: values[7] || "",
-      isFavorable: normalizeJudgmentType(values[8]),
-      createdAt: values[9] || new Date().toISOString(),
-    };
-  }
+/**
+ * Maps a raw row to a JudgmentRecord using the actual header row from the sheet.
+ * Looks up each field by its column header name — never by index position.
+ * Robust against trailing-empty-cell truncation by Google Sheets API.
+ */
+function rowToRecord(id: number, values: string[], headers: string[]): JudgmentRecord {
+  const getVal = (colName: string, altName?: string): string => {
+    let idx = headers.indexOf(colName);
+    if (idx === -1 && altName) idx = headers.indexOf(altName);
+    return idx !== -1 ? (values[idx] || "") : "";
+  };
+
   return {
     id,
-    caseNumber: "",
-    court: values[0] || "",
-    plaintiff: values[1] || "",
-    defendant: values[2] || "",
-    assignedLawyer: values[3] || "",
-    judgmentNumber: values[4] || "",
-    judgmentDate: values[5] || "",
-    summary: values[6] || "",
-    isFavorable: normalizeJudgmentType(values[7]),
-    createdAt: values[8] || new Date().toISOString(),
+    caseNumber: getVal("رقم القضية"),
+    court: getVal("المحكمة المختصة"),
+    plaintiff: getVal("المدعي"),
+    defendant: getVal("المدعى عليه"),
+    assignedLawyer: getVal("المحامي المكلف"),
+    judgmentNumber: getVal("رقم الصك"),
+    judgmentDate: getVal("تاريخ الحكم"),
+    summary: getVal("ملخص الحكم"),
+    isFavorable: normalizeJudgmentType(getVal("الحكم", "هل الحكم لصالح العميل")),
+    createdAt: getVal("تاريخ الإنشاء") || new Date().toISOString(),
   };
 }
 
+/**
+ * Converts a JudgmentRecord back to a row array ordered by JUDGMENT_SHEET_COLUMNS.
+ * Always outputs exactly 10 values in the canonical column order.
+ */
 function recordToRow(record: Omit<JudgmentRecord, "id">): string[] {
   return [
-    record.caseNumber || "",
-    record.court || "",
-    record.plaintiff || "",
-    record.defendant || "",
-    record.assignedLawyer || "",
-    record.judgmentNumber || "",
-    record.judgmentDate || "",
-    record.summary || "",
-    normalizeJudgmentType(record.isFavorable),
-    record.createdAt || new Date().toISOString(),
+    record.caseNumber || "",           // A: رقم القضية
+    record.court || "",                // B: المحكمة المختصة
+    record.plaintiff || "",            // C: المدعي
+    record.defendant || "",            // D: المدعى عليه
+    record.assignedLawyer || "",       // E: المحامي المكلف
+    record.judgmentNumber || "",       // F: رقم الصك
+    record.judgmentDate || "",         // G: تاريخ الحكم
+    record.summary || "",              // H: ملخص الحكم
+    normalizeJudgmentType(record.isFavorable), // I: الحكم
+    record.createdAt || new Date().toISOString(), // J: تاريخ الإنشاء
   ];
+}
+
+// Sanity check: ensure JUDGMENT_SHEET_COLUMNS hasn't drifted from recordToRow order
+const _EXPECTED_COLS = ["رقم القضية","المحكمة المختصة","المدعي","المدعى عليه","المحامي المكلف","رقم الصك","تاريخ الحكم","ملخص الحكم","الحكم","تاريخ الإنشاء"];
+if (JUDGMENT_SHEET_COLUMNS.join(",") !== _EXPECTED_COLS.join(",")) {
+  logger.warn("JUDGMENT_SHEET_COLUMNS order mismatch — recordToRow may write to wrong columns!");
 }
 
 /**
@@ -85,8 +92,8 @@ router.get("/judgments", attachAuthUser, requireAuth, async (req, res) => {
   try {
     await ensureJudgmentSheetReady();
     const forceRefresh = req.query.refresh === "true";
-    const rows = await listJudgmentRows(forceRefresh);
-    const records = rows.map(({ id, values }) => rowToRecord(id, values));
+    const { headers, rows } = await listJudgmentRowsWithHeaders(forceRefresh);
+    const records = rows.map(({ id, values }) => rowToRecord(id, values, headers));
     res.json(records);
   } catch (err) {
     logger.error({ err }, "Failed to list Judgment records");
@@ -106,13 +113,13 @@ router.get("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
   }
   try {
     await ensureJudgmentSheetReady();
-    const rows = await listJudgmentRows();
+    const { headers, rows } = await listJudgmentRowsWithHeaders();
     const match = rows.find((r) => r.id === id);
     if (!match) {
       res.status(404).json({ error: "الحكم غير موجود." });
       return;
     }
-    res.json(rowToRecord(match.id, match.values));
+    res.json(rowToRecord(match.id, match.values, headers));
   } catch (err) {
     logger.error({ err }, "Failed to get Judgment record");
     res.status(500).json({ error: "فشل تحميل بيانات الحكم." });
@@ -165,13 +172,13 @@ router.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
   const body = req.body as Partial<JudgmentRecord>;
   try {
     await ensureJudgmentSheetReady();
-    const rows = await listJudgmentRows();
+    const { headers, rows } = await listJudgmentRowsWithHeaders();
     const existing = rows.find((r) => r.id === id);
     if (!existing) {
       res.status(404).json({ error: "الحكم غير موجود." });
       return;
     }
-    const existingRecord = rowToRecord(id, existing.values);
+    const existingRecord = rowToRecord(id, existing.values, headers);
     const updatedPayload: Omit<JudgmentRecord, "id"> = {
       caseNumber: body.caseNumber !== undefined ? body.caseNumber.trim() : existingRecord.caseNumber,
       court: body.court !== undefined ? body.court.trim() : existingRecord.court,

@@ -80,7 +80,6 @@ async function getJudgmentSheetId(): Promise<number> {
 
 /** Ensures the "Judgment" sheet tab exists with the correct header row. */
 export async function ensureJudgmentSheetReady(): Promise<void> {
-  if (isJudgmentSheetReadyCache) return;
   try {
     const sheets = getClient();
     const spreadsheet = await sheets.spreadsheets.get({
@@ -144,6 +143,22 @@ export async function listJudgmentRows(forceRefresh = false): Promise<{ id: numb
     logger.warn({ err }, "Failed to fetch Judgment rows from Google Sheets, returning cached/empty");
     return judgmentDataCache ?? [];
   }
+}
+
+/** Fetches both headers and data rows in a single API call. */
+export async function listJudgmentRowsWithHeaders(): Promise<{ headers: string[]; rows: { id: number; values: JudgmentRow }[] }> {
+  await ensureJudgmentSheetReady();
+  const sheets = getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: env.googleSpreadsheetId,
+    range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}`,
+  });
+  const data = response.data.values ?? [];
+  const headers = data[0] ?? [];
+  const rows = data.slice(1)
+    .map((row, index) => ({ id: index + 2, values: row as JudgmentRow }))
+    .filter((row) => row.values.some((cell) => cell !== undefined && cell !== ""));
+  return { headers, rows };
 }
 
 /** Appends a new Judgment record row and returns its 1-based row id. */

@@ -13,7 +13,7 @@ import { computeHearingDateTime, parseHijriDateString, hijriToGregorian } from "
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import { listPoaRows } from "./poa.sheets.service";
-import { listJudgmentRows } from "./judgment.sheets.service";
+import { listJudgmentRowsWithHeaders } from "./judgment.sheets.service";
 
 const COLUMN_INDEX: Record<string, number> = {
   // Arabic headers
@@ -345,12 +345,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
     listSessions(),
     listPoaRows(),
-    listJudgmentRows(),
+    listJudgmentRowsWithHeaders(),
   ]);
 
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
   const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
-  const judgmentRows = judgmentRes.status === "fulfilled" ? judgmentRes.value : [];
+  const judgmentResult = judgmentRes.status === "fulfilled"
+    ? judgmentRes.value
+    : { headers: ["رقم القضية","المحكمة المختصة","المدعي","المدعى عليه","المحامي المكلف","رقم الصك","تاريخ الحكم","ملخص الحكم","الحكم","تاريخ الإنشاء"], rows: [] };
 
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
@@ -372,16 +374,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     else if (effective === "Finished") finishedHearings += 1;
   }
 
+  // Resolve column index for "الحكم" from actual Row 1 headers (handles old/new schemas)
+  const judgmentColIdx = judgmentResult.headers.findIndex(
+    (h) => h === "الحكم" || h === "هل الحكم لصالح العميل",
+  );
+
   let favorableJudgments = 0;
   let unfavorableJudgments = 0;
-  for (const row of judgmentRows) {
-    const rawVal = row.values.length >= 10 ? row.values[8] : row.values[7];
-    const val = (rawVal || "").trim();
-    if (val === "نهائي" || val === "نعم") {
-      favorableJudgments += 1;
-    } else if (val === "ابتدائي" || val === "لا") {
+  for (const row of judgmentResult.rows) {
+    const rawVal = judgmentColIdx !== -1 ? (row.values[judgmentColIdx] || "") : "";
+    const val = rawVal.trim();
+    if (val === "ابتدائي" || val === "لا") {
       unfavorableJudgments += 1;
     } else {
+      // "نهائي", "نعم", or any other value — count as final/favorable
       favorableJudgments += 1;
     }
   }
