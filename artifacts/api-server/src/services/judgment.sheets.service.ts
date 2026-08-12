@@ -78,7 +78,10 @@ async function getJudgmentSheetId(): Promise<number> {
   return judgmentSheetIdCache;
 }
 
-/** Ensures the "Judgment" sheet tab exists with the correct header row. */
+/** Ensures the "Judgment" sheet tab exists with the correct header row.
+ *  Also migrates old 9-column rows (pre-caseNumber) to the new 10-column schema
+ *  by prepending an empty string at column A, shifting other data right.
+ */
 export async function ensureJudgmentSheetReady(): Promise<void> {
   try {
     const sheets = getClient();
@@ -100,13 +103,56 @@ export async function ensureJudgmentSheetReady(): Promise<void> {
       logger.info(`Created sheet tab "${JUDGMENT_SHEET_NAME}"`);
     }
 
-    // Always ensure the header is correct
+    // ── Step 1: Overwrite Row 1 with the correct 10-column headers ──────────────
     await sheets.spreadsheets.values.update({
       spreadsheetId: env.googleSpreadsheetId,
       range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}1`,
       valueInputOption: "RAW",
       requestBody: { values: [[...JUDGMENT_SHEET_COLUMNS]] },
     });
+
+    // ── Step 2: Migrate old 9-column rows → new 10-column rows ──────────────────
+    // Old schema had no "رقم القضية" column (9 cols). New schema has 10 cols.
+    // Google Sheets truncates trailing empty cells, so new rows with non-empty
+    // createdAt always have length === JUDGMENT_COLS (10). Old rows have length < 10.
+    // We detect them and prepend an empty string for caseNumber.
+    const dataRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${JUDGMENT_SHEET_NAME}!A2:${COL_LAST}`,
+    });
+    const dataRows = (dataRes.data.values ?? []) as string[][];
+    const migrationData: { range: string; values: string[][] }[] = [];
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      // A row is considered "old format" when it has fewer than JUDGMENT_COLS values
+      // AND the first cell is non-empty (i.e. it contains court name, not case number).
+      // Rows that are entirely empty are skipped.
+      const hasContent = row.some((c) => c !== undefined && c !== "");
+      if (hasContent && row.length < JUDGMENT_COLS) {
+        const rowNum = i + 2; // sheet rows are 1-indexed; row 1 = header
+        const migratedRow = ["", ...row]; // prepend empty caseNumber
+        // Pad to exactly JUDGMENT_COLS to overwrite any stale values
+        while (migratedRow.length < JUDGMENT_COLS) migratedRow.push("");
+        migrationData.push({
+          range: `${JUDGMENT_SHEET_NAME}!A${rowNum}:${COL_LAST}${rowNum}`,
+          values: [migratedRow],
+        });
+      }
+    }
+
+    if (migrationData.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: env.googleSpreadsheetId,
+        requestBody: { valueInputOption: "RAW", data: migrationData },
+      });
+      logger.info(
+        { count: migrationData.length },
+        "Migrated old 9-column Judgment rows to new 10-column schema",
+      );
+      invalidateJudgmentCache();
+    }
+
     isJudgmentSheetReadyCache = true;
   } catch (err) {
     isJudgmentSheetReadyCache = false;
@@ -161,21 +207,26 @@ export async function listJudgmentRowsWithHeaders(): Promise<{ headers: string[]
   return { headers, rows };
 }
 
-/** Appends a new Judgment record row and returns its 1-based row id. */
+/** Appends a new Judgment record row and returns its 1-based row id.
+ *  Uses OVERWRITE (not INSERT_ROWS) to avoid inheriting cell formatting
+ *  from the row above, which would make text appear white on a white background.
+ */
 export async function appendJudgmentRow(values: JudgmentRow): Promise<number> {
   invalidateJudgmentCache();
   const sheets = getClient();
+  // Pad the row to exactly JUDGMENT_COLS so we always write all 10 columns
+  const paddedValues: string[] = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${JUDGMENT_SHEET_NAME}!A:${COL_LAST}`,
     valueInputOption: "RAW",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [values] },
+    insertDataOption: "OVERWRITE", // OVERWRITE avoids inheriting header row's white-text formatting
+    requestBody: { values: [paddedValues] },
   });
   const updatedRange = response.data.updates?.updatedRange;
   const match = updatedRange?.match(/![A-Z]+(\d+):/);
   if (match) return Number(match[1]);
-  const rows = await listJudgmentRows(true);
+  const { rows } = await listJudgmentRowsWithHeaders();
   const last = rows[rows.length - 1];
   if (!last) throw new Error("Failed to determine id of newly created Judgment row.");
   return last.id;
@@ -185,13 +236,16 @@ export async function appendJudgmentRow(values: JudgmentRow): Promise<number> {
 export async function updateJudgmentRow(id: number, values: JudgmentRow): Promise<void> {
   invalidateJudgmentCache();
   const sheets = getClient();
+  // Always write exactly JUDGMENT_COLS columns to avoid leaving stale values
+  const paddedValues: string[] = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${JUDGMENT_SHEET_NAME}!A${id}:${COL_LAST}${id}`,
     valueInputOption: "RAW",
-    requestBody: { values: [values] },
+    requestBody: { values: [paddedValues] },
   });
 }
+
 
 /** Deletes a Judgment row by its 1-based row id. */
 export async function deleteJudgmentRow(id: number): Promise<void> {
