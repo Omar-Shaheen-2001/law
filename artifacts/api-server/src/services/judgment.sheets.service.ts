@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 const JUDGMENT_SHEET_NAME = "Judgment";
 
 export const JUDGMENT_SHEET_COLUMNS = [
+  "رقم القضية",
   "المحكمة المختصة",
   "المدعي",
   "المدعى عليه",
@@ -19,7 +20,6 @@ export const JUDGMENT_SHEET_COLUMNS = [
   "ملخص الحكم",
   "الحكم",
   "تاريخ الإنشاء",
-  "رقم القضية",
 ] as const;
 
 export const JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length; // 10

@@ -375,7 +375,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   let favorableJudgments = 0;
   let unfavorableJudgments = 0;
   for (const row of judgmentRows) {
-    const rawVal = row.values[7];
+    const rawVal = row.values.length >= 10 ? row.values[8] : row.values[7];
     const val = (rawVal || "").trim();
     if (val === "نهائي" || val === "نعم") {
       favorableJudgments += 1;
