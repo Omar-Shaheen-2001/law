@@ -78,11 +78,10 @@ async function getJudgmentSheetId(): Promise<number> {
   return judgmentSheetIdCache;
 }
 
-/** Ensures the "Judgment" sheet tab exists with the correct header row.
- *  Also migrates old 9-column rows (pre-caseNumber) to the new 10-column schema
- *  by prepending an empty string at column A, shifting other data right.
- */
+/** Ensures the "Judgment" sheet tab exists with the correct header row and text formatting. */
 export async function ensureJudgmentSheetReady(): Promise<void> {
+  if (isJudgmentSheetReadyCache) return;
+
   try {
     const sheets = getClient();
     const spreadsheet = await sheets.spreadsheets.get({
@@ -93,17 +92,19 @@ export async function ensureJudgmentSheetReady(): Promise<void> {
     );
 
     if (!existing) {
-      await sheets.spreadsheets.batchUpdate({
+      const addRes = await sheets.spreadsheets.batchUpdate({
         spreadsheetId: env.googleSpreadsheetId,
         requestBody: {
           requests: [{ addSheet: { properties: { title: JUDGMENT_SHEET_NAME } } }],
         },
       });
-      judgmentSheetIdCache = null;
+      judgmentSheetIdCache = addRes.data.replies?.[0]?.addSheet?.properties?.sheetId ?? null;
       logger.info(`Created sheet tab "${JUDGMENT_SHEET_NAME}"`);
+    } else {
+      judgmentSheetIdCache = existing.properties?.sheetId ?? null;
     }
 
-    // ── Step 1: Overwrite Row 1 with the correct 10-column headers ──────────────
+    // 1. Ensure Header row 1 is always updated to JUDGMENT_SHEET_COLUMNS
     await sheets.spreadsheets.values.update({
       spreadsheetId: env.googleSpreadsheetId,
       range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}1`,
@@ -111,45 +112,97 @@ export async function ensureJudgmentSheetReady(): Promise<void> {
       requestBody: { values: [[...JUDGMENT_SHEET_COLUMNS]] },
     });
 
-    // ── Step 2: Migrate old 9-column rows → new 10-column rows ──────────────────
-    // Old schema had no "رقم القضية" column (9 cols). New schema has 10 cols.
-    // Google Sheets truncates trailing empty cells, so new rows with non-empty
-    // createdAt always have length === JUDGMENT_COLS (10). Old rows have length < 10.
-    // We detect them and prepend an empty string for caseNumber.
+    // 2. Format cells explicitly so text color is BLACK on white background for data rows,
+    //    preventing Google Sheets from making text white.
+    if (judgmentSheetIdCache !== null) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: env.googleSpreadsheetId,
+        requestBody: {
+          requests: [
+            // Row 1 (Header): Dark Navy fill, white text, bold
+            {
+              repeatCell: {
+                range: {
+                  sheetId: judgmentSheetIdCache,
+                  startRowIndex: 0,
+                  endRowIndex: 1,
+                  startColumnIndex: 0,
+                  endColumnIndex: JUDGMENT_COLS,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.1, green: 0.15, blue: 0.25 },
+                    textFormat: {
+                      foregroundColor: { red: 1, green: 1, blue: 1 },
+                      bold: true,
+                      fontSize: 10,
+                    },
+                    horizontalAlignment: "CENTER",
+                    verticalAlignment: "MIDDLE",
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+              },
+            },
+            // Rows 2..1000 (Data): White fill, BLACK text, normal
+            {
+              repeatCell: {
+                range: {
+                  sheetId: judgmentSheetIdCache,
+                  startRowIndex: 1,
+                  endRowIndex: 1000,
+                  startColumnIndex: 0,
+                  endColumnIndex: JUDGMENT_COLS,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: {
+                      foregroundColor: { red: 0, green: 0, blue: 0 },
+                      bold: false,
+                      fontSize: 10,
+                    },
+                    horizontalAlignment: "RIGHT",
+                    verticalAlignment: "MIDDLE",
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    // 3. One-time fix for any row that was accidentally shifted by the previous bug
+    // (i.e. row[0] is empty, but row[1] contains numbers like a case number e.g. "44109283")
     const dataRes = await sheets.spreadsheets.values.get({
       spreadsheetId: env.googleSpreadsheetId,
       range: `${JUDGMENT_SHEET_NAME}!A2:${COL_LAST}`,
     });
     const dataRows = (dataRes.data.values ?? []) as string[][];
-    const migrationData: { range: string; values: string[][] }[] = [];
+    const repairUpdates: { range: string; values: string[][] }[] = [];
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      // A row is considered "old format" when it has fewer than JUDGMENT_COLS values
-      // AND the first cell is non-empty (i.e. it contains court name, not case number).
-      // Rows that are entirely empty are skipped.
-      const hasContent = row.some((c) => c !== undefined && c !== "");
-      if (hasContent && row.length < JUDGMENT_COLS) {
-        const rowNum = i + 2; // sheet rows are 1-indexed; row 1 = header
-        const migratedRow = ["", ...row]; // prepend empty caseNumber
-        // Pad to exactly JUDGMENT_COLS to overwrite any stale values
-        while (migratedRow.length < JUDGMENT_COLS) migratedRow.push("");
-        migrationData.push({
+      if (row.length > 1 && (row[0] === undefined || row[0] === "") && /^\d+/.test(row[1]?.trim() || "")) {
+        const rowNum = i + 2;
+        const repairedRow = [...row];
+        repairedRow.shift(); // remove leading empty string, restoring caseNumber to Col A
+        while (repairedRow.length < JUDGMENT_COLS) repairedRow.push("");
+        repairUpdates.push({
           range: `${JUDGMENT_SHEET_NAME}!A${rowNum}:${COL_LAST}${rowNum}`,
-          values: [migratedRow],
+          values: [repairedRow],
         });
       }
     }
 
-    if (migrationData.length > 0) {
+    if (repairUpdates.length > 0) {
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: env.googleSpreadsheetId,
-        requestBody: { valueInputOption: "RAW", data: migrationData },
+        requestBody: { valueInputOption: "RAW", data: repairUpdates },
       });
-      logger.info(
-        { count: migrationData.length },
-        "Migrated old 9-column Judgment rows to new 10-column schema",
-      );
+      logger.info({ count: repairUpdates.length }, "Repaired shifted judgment rows in Google Sheets");
       invalidateJudgmentCache();
     }
 
