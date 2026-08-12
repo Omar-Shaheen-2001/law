@@ -30,6 +30,21 @@ export interface DashboardStats {
   upcomingHearings: number;
   finishedHearings: number;
   totalPoas: number;
+  favorableJudgments?: number;
+  unfavorableJudgments?: number;
+}
+
+export interface Judgment {
+  id: number;
+  court: string;
+  plaintiff: string;
+  defendant: string;
+  assignedLawyer: string;
+  judgmentNumber: string;
+  judgmentDate: string;
+  summary: string;
+  isFavorable: 'نعم' | 'لا' | string;
+  createdAt: string;
 }
 
 export interface MessageInput {
@@ -148,6 +163,8 @@ export interface Session {
   sessionType: string | null;
   /** @nullable */
   sessionDateHijri: string | null;
+  /** @nullable */
+  sessionDay?: string | null;
   /** @nullable */
   sessionTime: string | null;
   /** @nullable */

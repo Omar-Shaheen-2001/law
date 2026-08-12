@@ -56,7 +56,9 @@ export const GetDashboardStatsResponse = zod.object({
   "todayHearings": zod.number(),
   "upcomingHearings": zod.number(),
   "finishedHearings": zod.number(),
-  "totalPoas": zod.number()
+  "totalPoas": zod.number(),
+  "favorableJudgments": zod.number().optional(),
+  "unfavorableJudgments": zod.number().optional()
 })
 
 

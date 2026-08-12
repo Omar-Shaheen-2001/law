@@ -17,6 +17,68 @@ const HIJRI_MONTHS_AR = [
   'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
 ];
 
+export const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+const HIJRI_FORMATS = [
+  'iDD/iMM/iYYYY',
+  'iD/iM/iYYYY',
+  'iDD-iMM-iYYYY',
+  'iD-iM-iYYYY',
+  'iYYYY/iMM/iDD',
+  'iYYYY/iM/iD',
+  'iYYYY-iMM-iDD',
+  'iYYYY-iM-iD',
+];
+
+/**
+ * Returns the Arabic day name (e.g. الخميس, الأحد) for a session.
+ */
+export function getArabicDayName(session: {
+  sessionDay?: string | null;
+  hearingAt?: string | null;
+  sessionDateHijri?: string | null;
+}): string | null {
+  if (session.sessionDay && session.sessionDay !== '—' && session.sessionDay.trim() !== '') {
+    return session.sessionDay;
+  }
+
+  if (session.hearingAt) {
+    const d = new Date(session.hearingAt);
+    if (!isNaN(d.getTime())) {
+      // Mecca time offset UTC+3
+      const meccaDate = new Date(d.getTime() + 3 * 3600 * 1000);
+      return ARABIC_DAYS[meccaDate.getUTCDay()] ?? null;
+    }
+  }
+
+  if (session.sessionDateHijri) {
+    const raw = session.sessionDateHijri.trim();
+    for (const fmt of HIJRI_FORMATS) {
+      try {
+        const m = moment(raw, fmt, true);
+        if (m && typeof m.isValid === 'function' && m.isValid()) {
+          return ARABIC_DAYS[m.day()] ?? null;
+        }
+      } catch {
+        // ignore format mismatch
+      }
+    }
+    for (const fmt of HIJRI_FORMATS) {
+      try {
+        const m = moment(raw, fmt);
+        if (m && typeof m.isValid === 'function' && m.isValid()) {
+          return ARABIC_DAYS[m.day()] ?? null;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return null;
+}
+
+
 /** Convert a JS Date to its Hijri equivalent (uses UTC date components). */
 export function dateToHijri(date: Date): HijriDate {
   const m = moment([date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()]);

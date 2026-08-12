@@ -9,6 +9,7 @@ import { Link } from 'wouter';
 import { Calendar, ChevronLeft, Plus, Scale, Clock, User, MoreVertical, Pencil, Trash2, ArrowUpDown } from 'lucide-react';
 import { TimeRemainingBadge } from '@/components/time-remaining';
 import { sortSessions, type SortOption } from '@/lib/session-sort';
+import { getArabicDayName } from '@/lib/hijri';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -111,6 +112,7 @@ type SessionItem = {
   court?: string | null;
   courtCircuit?: string | null;
   sessionDateHijri?: string | null;
+  sessionDay?: string | null;
   sessionTime?: string | null;
   status: SessionStatus;
   hearingAt?: string | null;
@@ -323,10 +325,16 @@ export default function SessionsPage() {
                               <span className="truncate">{session.court}</span>
                             </div>
                           )}
-                          {session.sessionDateHijri && (
+                          {(session.sessionDateHijri || session.hearingAt) && (
                             <div className="flex items-center gap-1.5 text-muted-foreground">
                               <Calendar className="w-3.5 h-3.5 shrink-0" />
-                              <span className="font-mono">{session.sessionDateHijri}</span>
+                              {getArabicDayName(session) && (
+                                <span className="font-medium text-foreground">{getArabicDayName(session)}</span>
+                              )}
+                              {getArabicDayName(session) && session.sessionDateHijri && (
+                                <span className="text-muted-foreground/50">·</span>
+                              )}
+                              {session.sessionDateHijri && <span className="font-mono">{session.sessionDateHijri}</span>}
                               {session.sessionTime && (
                                 <span className="font-mono text-muted-foreground/70">· {session.sessionTime}</span>
                               )}

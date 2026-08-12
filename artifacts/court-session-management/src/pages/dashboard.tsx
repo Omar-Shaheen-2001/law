@@ -1,6 +1,5 @@
 import { useGetDashboardStats } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Briefcase, Calendar, CheckCircle2, Clock, ArrowLeft, Sparkles, FileKey } from 'lucide-react';
+import { Briefcase, Calendar, CheckCircle2, Clock, ArrowLeft, Sparkles, FileKey, Gavel, XCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'wouter';
 
@@ -60,6 +59,28 @@ const stats = [
     dotColor: 'bg-blue-500',
     href: '/poa',
   },
+  {
+    key: 'favorableJudgments',
+    label: 'أحكام نهائية (لصالح العميل)',
+    icon: Gavel,
+    gradient: 'from-emerald-600/15 to-emerald-700/5',
+    iconBg: 'bg-emerald-600/20',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    borderColor: 'border-emerald-600/30',
+    dotColor: 'bg-emerald-600',
+    href: '/judgments',
+  },
+  {
+    key: 'unfavorableJudgments',
+    label: 'أحكام متبقية (ليست لصالح العميل)',
+    icon: XCircle,
+    gradient: 'from-amber-600/15 to-amber-700/5',
+    iconBg: 'bg-amber-600/20',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    borderColor: 'border-amber-600/30',
+    dotColor: 'bg-amber-600',
+    href: '/judgments',
+  },
 ] as const;
 
 export default function DashboardPage() {
@@ -84,14 +105,14 @@ export default function DashboardPage() {
           <div className="w-1 h-6 rounded-full bg-primary" />
           <h1 className="text-2xl font-bold tracking-tight">لوحة التحكم</h1>
         </div>
-        <p className="text-muted-foreground text-sm mr-3">نظرة عامة على نشاط جلسات المحكمة والوكالات</p>
+        <p className="text-muted-foreground text-sm mr-3">نظرة عامة على نشاط جلسات المحكمة والوكالات والأحكام القضائية</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {stats.map((stat, i) => {
           const Icon = stat.icon;
-          const value = data?.[stat.key];
+          const value = (data as Record<string, number> | undefined)?.[stat.key];
 
           return (
             <Link key={stat.key} href={stat.href}>
@@ -121,7 +142,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="fade-in-up fade-in-up-delay-4 grid gap-4 sm:grid-cols-3">
+      <div className="fade-in-up fade-in-up-delay-4 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Link href="/chat">
           <div
             className="group relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/8 to-primary/3 p-6 cursor-pointer transition-all duration-200 hover:border-primary/40 hover:shadow-lg hover:-translate-y-0.5 h-full"
@@ -134,7 +155,7 @@ export default function DashboardPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-base mb-1">تحليل رسالة جديدة</div>
                 <div className="text-sm text-muted-foreground leading-relaxed">
-                  استخراج تفاصيل الجلسة من الرسالة النصية بالذكاء الاصطناعي
+                  استخراج تفاصيل الجلسة من الرسالة النصية
                 </div>
               </div>
             </div>
@@ -156,7 +177,7 @@ export default function DashboardPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-base mb-1">عرض جميع الجلسات</div>
                 <div className="text-sm text-muted-foreground leading-relaxed">
-                  تصفّح وإدارة جلسات الاستماع المسجّلة
+                  تصفّح وإدارة جلسات الاستماع
                 </div>
               </div>
             </div>
@@ -178,7 +199,29 @@ export default function DashboardPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-base mb-1">إدارة الوكالات الشرعية</div>
                 <div className="text-sm text-muted-foreground leading-relaxed">
-                  متابعة الوكالات وصلاحياتها وتواريخ الانتهاء
+                  متابعة الوكالات وتواريخ الانتهاء
+                </div>
+              </div>
+            </div>
+            <div className="absolute bottom-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/judgments">
+          <div
+            className="group relative overflow-hidden rounded-xl border border-border bg-card p-6 cursor-pointer transition-all duration-200 hover:border-emerald-500/30 hover:shadow-lg hover:-translate-y-0.5 h-full"
+            data-testid="link-view-judgments"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                <Gavel className="w-6 h-6 text-emerald-500 transition-colors" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-base mb-1">سجل الأحكام القضائية</div>
+                <div className="text-sm text-muted-foreground leading-relaxed">
+                  متابعة القرارات والأحكام النهائية
                 </div>
               </div>
             </div>
@@ -191,3 +234,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

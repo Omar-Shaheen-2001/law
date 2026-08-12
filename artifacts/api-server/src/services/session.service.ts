@@ -13,6 +13,7 @@ import { computeHearingDateTime, parseHijriDateString, hijriToGregorian } from "
 import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import { listPoaRows } from "./poa.sheets.service";
+import { listJudgmentRows } from "./judgment.sheets.service";
 
 const COLUMN_INDEX: Record<string, number> = {
   // Arabic headers
@@ -72,30 +73,6 @@ function parseStatus(raw: string): SessionStatus {
   return "Upcoming";
 }
 
-function rowToSession(id: number, row: SheetRow): Session {
-  const sessionDateHijri = nullableString(cell(row, "Session Date Hijri"));
-  const sessionTime = nullableString(cell(row, "Session Time"));
-  const hearingDate = computeHearingDateTime(sessionDateHijri, sessionTime);
-  return {
-    id,
-    caseNumber: nullableString(cell(row, "Case Number")),
-    plaintiff: nullableString(cell(row, "Plaintiff")),
-    defendant: nullableString(cell(row, "Defendant")),
-    court: nullableString(cell(row, "Court")),
-    courtCircuit: nullableString(cell(row, "Court Circuit")),
-    caseSubject: nullableString(cell(row, "Case Subject")),
-    sessionType: nullableString(cell(row, "Session Type")),
-    sessionDateHijri,
-    sessionTime,
-    notes: nullableString(cell(row, "Notes")),
-    status: parseStatus(cell(row, "Status")),
-    reminder24: cell(row, "Reminder24") === "true",
-    reminder6: cell(row, "Reminder6") === "true",
-    createdAt: cell(row, "Created At") || new Date().toISOString(),
-    hearingAt: hearingDate ? hearingDate.toISOString() : null,
-  };
-}
-
 const ARABIC_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 export function computeSessionDayStr(
@@ -112,6 +89,33 @@ export function computeSessionDayStr(
   if (!greg) return "—";
   const date = new Date(Date.UTC(greg.year, greg.month - 1, greg.day));
   return ARABIC_DAYS[date.getUTCDay()] ?? "—";
+}
+
+function rowToSession(id: number, row: SheetRow): Session {
+  const sessionDateHijri = nullableString(cell(row, "Session Date Hijri"));
+  const sessionTime = nullableString(cell(row, "Session Time"));
+  const hearingDate = computeHearingDateTime(sessionDateHijri, sessionTime);
+  const rawSessionDay = nullableString(cell(row, "Session Day"));
+  const sessionDay = rawSessionDay || computeSessionDayStr(sessionDateHijri, sessionTime);
+  return {
+    id,
+    caseNumber: nullableString(cell(row, "Case Number")),
+    plaintiff: nullableString(cell(row, "Plaintiff")),
+    defendant: nullableString(cell(row, "Defendant")),
+    court: nullableString(cell(row, "Court")),
+    courtCircuit: nullableString(cell(row, "Court Circuit")),
+    caseSubject: nullableString(cell(row, "Case Subject")),
+    sessionType: nullableString(cell(row, "Session Type")),
+    sessionDateHijri,
+    sessionDay: sessionDay && sessionDay !== "—" ? sessionDay : null,
+    sessionTime,
+    notes: nullableString(cell(row, "Notes")),
+    status: parseStatus(cell(row, "Status")),
+    reminder24: cell(row, "Reminder24") === "true",
+    reminder6: cell(row, "Reminder6") === "true",
+    createdAt: cell(row, "Created At") || new Date().toISOString(),
+    hearingAt: hearingDate ? hearingDate.toISOString() : null,
+  };
 }
 
 export function computeDaysRemainingStr(
@@ -333,22 +337,29 @@ export interface DashboardStats {
   upcomingHearings: number;
   finishedHearings: number;
   totalPoas: number;
+  favorableJudgments: number;
+  unfavorableJudgments: number;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [sessionsRes, poaRes] = await Promise.allSettled([
+  const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
     listSessions(),
     listPoaRows(),
+    listJudgmentRows(),
   ]);
 
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
   const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
+  const judgmentRows = judgmentRes.status === "fulfilled" ? judgmentRes.value : [];
 
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
   }
   if (poaRes.status === "rejected") {
     logger.warn({ err: poaRes.reason }, "Failed to load POA rows for dashboard stats");
+  }
+  if (judgmentRes.status === "rejected") {
+    logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
   }
 
   let todayHearings = 0;
@@ -360,12 +371,26 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     else if (effective === "Upcoming") upcomingHearings += 1;
     else if (effective === "Finished") finishedHearings += 1;
   }
+
+  let favorableJudgments = 0;
+  let unfavorableJudgments = 0;
+  for (const row of judgmentRows) {
+    const isFavorableVal = (row.values[7] || "").trim();
+    if (isFavorableVal === "نعم") {
+      favorableJudgments += 1;
+    } else {
+      unfavorableJudgments += 1;
+    }
+  }
+
   return {
     totalCases: sessions.length,
     todayHearings,
     upcomingHearings,
     finishedHearings,
     totalPoas: poaRows.length,
+    favorableJudgments,
+    unfavorableJudgments,
   };
 }
 

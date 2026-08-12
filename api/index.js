@@ -20702,27 +20702,27 @@ var require_router = __commonJS({
     var slice2 = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module2.exports = Router11;
+    module2.exports = Router12;
     module2.exports.Route = Route;
-    function Router11(options) {
-      if (!(this instanceof Router11)) {
-        return new Router11(options);
+    function Router12(options) {
+      if (!(this instanceof Router12)) {
+        return new Router12(options);
       }
       const opts = options || {};
-      function router11(req, res, next) {
-        router11.handle(req, res, next);
+      function router12(req, res, next) {
+        router12.handle(req, res, next);
       }
-      Object.setPrototypeOf(router11, this);
-      router11.caseSensitive = opts.caseSensitive;
-      router11.mergeParams = opts.mergeParams;
-      router11.params = {};
-      router11.strict = opts.strict;
-      router11.stack = [];
-      return router11;
+      Object.setPrototypeOf(router12, this);
+      router12.caseSensitive = opts.caseSensitive;
+      router12.mergeParams = opts.mergeParams;
+      router12.params = {};
+      router12.strict = opts.strict;
+      router12.stack = [];
+      return router12;
     }
-    Router11.prototype = function() {
+    Router12.prototype = function() {
     };
-    Router11.prototype.param = function param(name, fn) {
+    Router12.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20742,7 +20742,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router11.prototype.handle = function handle(req, res, callback) {
+    Router12.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20869,7 +20869,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router11.prototype.use = function use(handler2) {
+    Router12.prototype.use = function use(handler2) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler2 !== "function") {
@@ -20902,7 +20902,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router11.prototype.route = function route(path3) {
+    Router12.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20917,7 +20917,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router11.prototype[method] = function(path3) {
+      Router12.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice2.call(arguments, 1));
         return this;
@@ -21100,13 +21100,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve3 = require("node:path").resolve;
     var once = require_once();
-    var Router11 = require_router();
+    var Router12 = require_router();
     var slice2 = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports2 = module2.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router11 = null;
+      var router12 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21115,13 +21115,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router11 === null) {
-            router11 = new Router11({
+          if (router12 === null) {
+            router12 = new Router12({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router11;
+          return router12;
         }
       });
     };
@@ -21192,15 +21192,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router11 = this.router;
+      var router12 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router11.use(path3, fn2);
+          return router12.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router11.use(path3, function mounted_app(req, res, next) {
+        router12.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23785,7 +23785,7 @@ var require_express = __commonJS({
     var EventEmitter = require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router11 = require_router();
+    var Router12 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -23807,8 +23807,8 @@ var require_express = __commonJS({
     exports2.application = proto;
     exports2.request = req;
     exports2.response = res;
-    exports2.Route = Router11.Route;
-    exports2.Router = Router11;
+    exports2.Route = Router12.Route;
+    exports2.Router = Router12;
     exports2.json = bodyParser.json;
     exports2.raw = bodyParser.raw;
     exports2.static = require_serve_static();
@@ -32775,8 +32775,8 @@ var require_moment_hijri = __commonJS({
     "use strict";
     (function(root, factory) {
       if (typeof define === "function" && define.amd) {
-        define(["moment"], function(moment2) {
-          root.moment = factory(moment2);
+        define(["moment"], function(moment3) {
+          root.moment = factory(moment3);
           return root.moment;
         });
       } else if (typeof exports2 === "object") {
@@ -32784,8 +32784,8 @@ var require_moment_hijri = __commonJS({
       } else {
         root.moment = factory(root.moment);
       }
-    })(exports2, function(moment2) {
-      if (moment2 == null) {
+    })(exports2, function(moment3) {
+      if (moment3 == null) {
         throw new Error("Cannot find moment");
       }
       var ummalqura = {
@@ -34766,11 +34766,11 @@ var require_moment_hijri = __commonJS({
       function normalizeUnits(units) {
         return units ? unitAliases[units] || units.toLowerCase().replace(/(.)s$/, "$1") : units;
       }
-      function setDate(moment3, year, month, date) {
-        var utc = moment3._isUTC ? "UTC" : "";
-        moment3._d["set" + utc + "FullYear"](year);
-        moment3._d["set" + utc + "Month"](month);
-        moment3._d["set" + utc + "Date"](date);
+      function setDate(moment4, year, month, date) {
+        var utc = moment4._isUTC ? "UTC" : "";
+        moment4._d["set" + utc + "FullYear"](year);
+        moment4._d["set" + utc + "Month"](month);
+        moment4._d["set" + utc + "Date"](date);
       }
       function objectCreate(parent) {
         function F() {
@@ -34786,7 +34786,7 @@ var require_moment_hijri = __commonJS({
         else
           return object.constructor.prototype;
       }
-      extend(getPrototypeOf(moment2.localeData()), {
+      extend(getPrototypeOf(moment3.localeData()), {
         _iMonths: [
           "Muharram",
           "Safar",
@@ -34840,12 +34840,12 @@ var require_moment_hijri = __commonJS({
         iMonths: "\u0645\u062D\u0631\u0645_\u0635\u0641\u0631_\u0631\u0628\u064A\u0639 \u0627\u0644\u0623\u0648\u0644_\u0631\u0628\u064A\u0639 \u0627\u0644\u062B\u0627\u0646\u064A_\u062C\u0645\u0627\u062F\u0649 \u0627\u0644\u0623\u0648\u0644\u0649_\u062C\u0645\u0627\u062F\u0649 \u0627\u0644\u0622\u062E\u0631\u0629_\u0631\u062C\u0628_\u0634\u0639\u0628\u0627\u0646_\u0631\u0645\u0636\u0627\u0646_\u0634\u0648\u0627\u0644_\u0630\u0648 \u0627\u0644\u0642\u0639\u062F\u0629_\u0630\u0648 \u0627\u0644\u062D\u062C\u0629".split("_"),
         iMonthsShort: "\u0645\u062D\u0631\u0645_\u0635\u0641\u0631_\u0631\u0628\u064A\u0639 \u0661_\u0631\u0628\u064A\u0639 \u0662_\u062C\u0645\u0627\u062F\u0649 \u0661_\u062C\u0645\u0627\u062F\u0649 \u0662_\u0631\u062C\u0628_\u0634\u0639\u0628\u0627\u0646_\u0631\u0645\u0636\u0627\u0646_\u0634\u0648\u0627\u0644_\u0630\u0648 \u0627\u0644\u0642\u0639\u062F\u0629_\u0630\u0648 \u0627\u0644\u062D\u062C\u0629".split("_")
       };
-      if (typeof moment2.updateLocale === "function") {
-        moment2.updateLocale("ar-sa", iMonthNames);
+      if (typeof moment3.updateLocale === "function") {
+        moment3.updateLocale("ar-sa", iMonthNames);
       } else {
-        var oldLocale = moment2.locale();
-        moment2.defineLocale("ar-sa", iMonthNames);
-        moment2.locale(oldLocale);
+        var oldLocale = moment3.locale();
+        moment3.defineLocale("ar-sa", iMonthNames);
+        moment3.locale(oldLocale);
       }
       function makeFormatFunction(format2) {
         var array = format2.match(formattingTokens), length = array.length, i2;
@@ -34897,7 +34897,7 @@ var require_moment_hijri = __commonJS({
             return parseTokenWord;
           case "a":
           case "A":
-            return moment2.localeData(config._l)._meridiemParse;
+            return moment3.localeData(config._l)._meridiemParse;
           case "X":
             return parseTokenTimestampMs;
           case "Z":
@@ -34933,7 +34933,7 @@ var require_moment_hijri = __commonJS({
             break;
           case "iMMM":
           case "iMMMM":
-            a = moment2.localeData(config._l).iMonthsParse(input);
+            a = moment3.localeData(config._l).iMonthsParse(input);
             if (a != null)
               datePartArray[1] = a;
             else
@@ -35058,9 +35058,9 @@ var require_moment_hijri = __commonJS({
           }
         }
         if (utc)
-          m = moment2.utc(input, format2, lang);
+          m = moment3.utc(input, format2, lang);
         else
-          m = moment2(input, format2, lang);
+          m = moment3(input, format2, lang);
         if (config._isValid === false)
           m._isValid = false;
         m._hDiff = config._hDiff || 0;
@@ -35071,8 +35071,8 @@ var require_moment_hijri = __commonJS({
       function hMoment(input, format2, lang) {
         return makeMoment(input, format2, lang, false);
       }
-      extend(hMoment, moment2);
-      hMoment.fn = objectCreate(moment2.fn);
+      extend(hMoment, moment3);
+      hMoment.fn = objectCreate(moment3.fn);
       hMoment.utc = function(input, format2, lang) {
         return makeMoment(input, format2, lang, true);
       };
@@ -35092,7 +35092,7 @@ var require_moment_hijri = __commonJS({
           }
           format2 = formatFunctions[format2](this);
         }
-        return moment2.fn.format.call(this, format2);
+        return moment3.fn.format.call(this, format2);
       };
       hMoment.fn.iYear = function(input) {
         var lastDay, h, g;
@@ -35104,7 +35104,7 @@ var require_moment_hijri = __commonJS({
           if (this.month() !== g.gm || this.date() !== g.gd || this.year() !== g.gy) {
             setDate(this, g.gy, g.gm, g.gd);
           }
-          moment2.updateOffset(this);
+          moment3.updateOffset(this);
           return this;
         } else {
           return toHijri(this.year(), this.month(), this.date()).hy;
@@ -35134,7 +35134,7 @@ var require_moment_hijri = __commonJS({
           if (this.month() !== g.gm || this.date() !== g.gd || this.year() !== g.gy) {
             setDate(this, g.gy, g.gm, g.gd);
           }
-          moment2.updateOffset(this);
+          moment3.updateOffset(this);
           return this;
         } else {
           return toHijri(this.year(), this.month(), this.date()).hm;
@@ -35149,7 +35149,7 @@ var require_moment_hijri = __commonJS({
           if (this.month() !== g.gm || this.date() !== g.gd || this.year() !== g.gy) {
             setDate(this, g.gy, g.gm, g.gd);
           }
-          moment2.updateOffset(this);
+          moment3.updateOffset(this);
           return this;
         } else {
           return toHijri(this.year(), this.month(), this.date()).hd;
@@ -35185,7 +35185,7 @@ var require_moment_hijri = __commonJS({
         } else if (units === "idate") {
           this.iDate(this.iDate() + val);
         } else {
-          moment2.fn.add.call(this, val, units);
+          moment3.fn.add.call(this, val, units);
         }
         return this;
       };
@@ -35204,7 +35204,7 @@ var require_moment_hijri = __commonJS({
         } else if (units === "idate") {
           this.iDate(this.iDate() - val);
         } else {
-          moment2.fn.subtract.call(this, val, units);
+          moment3.fn.subtract.call(this, val, units);
         }
         return this;
       };
@@ -35221,7 +35221,7 @@ var require_moment_hijri = __commonJS({
           this.milliseconds(0);
           return this;
         } else {
-          return moment2.fn.startOf.call(this, units);
+          return moment3.fn.startOf.call(this, units);
         }
       };
       hMoment.fn.endOf = function(units) {
@@ -35316,7 +35316,7 @@ __export(vercelHandler_exports, {
 module.exports = __toCommonJS(vercelHandler_exports);
 
 // src/app.ts
-var import_express11 = __toESM(require_express2(), 1);
+var import_express12 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -35325,7 +35325,7 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_url2 = require("url");
 
 // src/routes/index.ts
-var import_express10 = __toESM(require_express2(), 1);
+var import_express11 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -39236,7 +39236,9 @@ var GetDashboardStatsResponse = objectType({
   "todayHearings": numberType(),
   "upcomingHearings": numberType(),
   "finishedHearings": numberType(),
-  "totalPoas": numberType()
+  "totalPoas": numberType(),
+  "favorableJudgments": numberType().optional(),
+  "unfavorableJudgments": numberType().optional()
 });
 var AnalyzeMessageBody = objectType({
   "message": stringType().min(1).describe("Raw court SMS text pasted by the secretary")
@@ -40301,6 +40303,170 @@ async function deletePoaRow(id) {
   });
 }
 
+// src/services/judgment.sheets.service.ts
+var import_googleapis3 = require("googleapis");
+var JUDGMENT_SHEET_NAME = "Judgment";
+var JUDGMENT_SHEET_COLUMNS = [
+  "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629",
+  "\u0627\u0644\u0645\u062F\u0639\u064A",
+  "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647",
+  "\u0627\u0644\u0645\u062D\u0627\u0645\u064A \u0627\u0644\u0645\u0643\u0644\u0641",
+  "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645",
+  "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645",
+  "\u0647\u0644 \u0627\u0644\u062D\u0643\u0645 \u0644\u0635\u0627\u0644\u062D \u0627\u0644\u0639\u0645\u064A\u0644",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"
+];
+var JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length;
+var COL_LAST2 = String.fromCharCode("A".charCodeAt(0) + JUDGMENT_COLS - 1);
+var sheetsClient3 = null;
+function getClient3() {
+  if (!sheetsClient3) {
+    const credentials = env.googleServiceAccountJson;
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error(
+        "GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email/private_key."
+      );
+    }
+    const privateKey = credentials.private_key.replace(/\\n/g, "\n");
+    const auth = new import_googleapis3.google.auth.JWT({
+      email: credentials.client_email,
+      key: privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+    });
+    sheetsClient3 = import_googleapis3.google.sheets({ version: "v4", auth });
+  }
+  return sheetsClient3;
+}
+var judgmentSheetIdCache = null;
+var isJudgmentSheetReadyCache = false;
+var judgmentDataCache = null;
+var lastJudgmentCacheTime = 0;
+var JUDGMENT_CACHE_TTL_MS = 15e3;
+function invalidateJudgmentCache() {
+  judgmentDataCache = null;
+  lastJudgmentCacheTime = 0;
+}
+async function getJudgmentSheetId() {
+  if (judgmentSheetIdCache !== null) return judgmentSheetIdCache;
+  const sheets = getClient3();
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: env.googleSpreadsheetId
+  });
+  const sheet = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === JUDGMENT_SHEET_NAME
+  );
+  if (!sheet?.properties && sheet?.properties?.sheetId === void 0) {
+    throw new Error(`Sheet tab "${JUDGMENT_SHEET_NAME}" not found.`);
+  }
+  judgmentSheetIdCache = sheet.properties.sheetId;
+  return judgmentSheetIdCache;
+}
+async function ensureJudgmentSheetReady() {
+  if (isJudgmentSheetReadyCache) return;
+  try {
+    const sheets = getClient3();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: env.googleSpreadsheetId
+    });
+    const existing = spreadsheet.data.sheets?.find(
+      (s) => s.properties?.title === JUDGMENT_SHEET_NAME
+    );
+    if (!existing) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: env.googleSpreadsheetId,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: JUDGMENT_SHEET_NAME } } }]
+        }
+      });
+      judgmentSheetIdCache = null;
+      logger.info(`Created sheet tab "${JUDGMENT_SHEET_NAME}"`);
+    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST2}1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[...JUDGMENT_SHEET_COLUMNS]] }
+    });
+    isJudgmentSheetReadyCache = true;
+  } catch (err) {
+    isJudgmentSheetReadyCache = false;
+    logger.warn({ err }, "ensureJudgmentSheetReady non-fatal warning");
+  }
+}
+async function listJudgmentRows(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && judgmentDataCache !== null && now - lastJudgmentCacheTime < JUDGMENT_CACHE_TTL_MS) {
+    return judgmentDataCache;
+  }
+  await ensureJudgmentSheetReady();
+  try {
+    const sheets = getClient3();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${JUDGMENT_SHEET_NAME}!A2:${COL_LAST2}`
+    });
+    const rows = response.data.values ?? [];
+    const result = rows.map((row, index) => ({ id: index + 2, values: row })).filter((row) => row.values.some((cell2) => cell2 !== void 0 && cell2 !== ""));
+    judgmentDataCache = result;
+    lastJudgmentCacheTime = now;
+    return result;
+  } catch (err) {
+    logger.warn({ err }, "Failed to fetch Judgment rows from Google Sheets, returning cached/empty");
+    return judgmentDataCache ?? [];
+  }
+}
+async function appendJudgmentRow(values) {
+  invalidateJudgmentCache();
+  const sheets = getClient3();
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: env.googleSpreadsheetId,
+    range: `${JUDGMENT_SHEET_NAME}!A:${COL_LAST2}`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [values] }
+  });
+  const updatedRange = response.data.updates?.updatedRange;
+  const match = updatedRange?.match(/![A-Z]+(\d+):/);
+  if (match) return Number(match[1]);
+  const rows = await listJudgmentRows(true);
+  const last = rows[rows.length - 1];
+  if (!last) throw new Error("Failed to determine id of newly created Judgment row.");
+  return last.id;
+}
+async function updateJudgmentRow(id, values) {
+  invalidateJudgmentCache();
+  const sheets = getClient3();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.googleSpreadsheetId,
+    range: `${JUDGMENT_SHEET_NAME}!A${id}:${COL_LAST2}${id}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [values] }
+  });
+}
+async function deleteJudgmentRow(id) {
+  invalidateJudgmentCache();
+  const sheets = getClient3();
+  const sheetId = await getJudgmentSheetId();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: env.googleSpreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: id - 1,
+              endIndex: id
+            }
+          }
+        }
+      ]
+    }
+  });
+}
+
 // src/services/session.service.ts
 var COLUMN_INDEX = {
   // Arabic headers
@@ -40354,29 +40520,6 @@ function parseStatus(raw) {
   }
   return "Upcoming";
 }
-function rowToSession(id, row) {
-  const sessionDateHijri = nullableString(cell(row, "Session Date Hijri"));
-  const sessionTime = nullableString(cell(row, "Session Time"));
-  const hearingDate = computeHearingDateTime(sessionDateHijri, sessionTime);
-  return {
-    id,
-    caseNumber: nullableString(cell(row, "Case Number")),
-    plaintiff: nullableString(cell(row, "Plaintiff")),
-    defendant: nullableString(cell(row, "Defendant")),
-    court: nullableString(cell(row, "Court")),
-    courtCircuit: nullableString(cell(row, "Court Circuit")),
-    caseSubject: nullableString(cell(row, "Case Subject")),
-    sessionType: nullableString(cell(row, "Session Type")),
-    sessionDateHijri,
-    sessionTime,
-    notes: nullableString(cell(row, "Notes")),
-    status: parseStatus(cell(row, "Status")),
-    reminder24: cell(row, "Reminder24") === "true",
-    reminder6: cell(row, "Reminder6") === "true",
-    createdAt: cell(row, "Created At") || (/* @__PURE__ */ new Date()).toISOString(),
-    hearingAt: hearingDate ? hearingDate.toISOString() : null
-  };
-}
 var ARABIC_DAYS = ["\u0627\u0644\u0623\u062D\u062F", "\u0627\u0644\u0625\u062B\u0646\u064A\u0646", "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062E\u0645\u064A\u0633", "\u0627\u0644\u062C\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062A"];
 function computeSessionDayStr(sessionDateHijri, sessionTime) {
   const hearingAt = computeHearingDateTime(sessionDateHijri, sessionTime);
@@ -40389,6 +40532,32 @@ function computeSessionDayStr(sessionDateHijri, sessionTime) {
   if (!greg) return "\u2014";
   const date = new Date(Date.UTC(greg.year, greg.month - 1, greg.day));
   return ARABIC_DAYS[date.getUTCDay()] ?? "\u2014";
+}
+function rowToSession(id, row) {
+  const sessionDateHijri = nullableString(cell(row, "Session Date Hijri"));
+  const sessionTime = nullableString(cell(row, "Session Time"));
+  const hearingDate = computeHearingDateTime(sessionDateHijri, sessionTime);
+  const rawSessionDay = nullableString(cell(row, "Session Day"));
+  const sessionDay = rawSessionDay || computeSessionDayStr(sessionDateHijri, sessionTime);
+  return {
+    id,
+    caseNumber: nullableString(cell(row, "Case Number")),
+    plaintiff: nullableString(cell(row, "Plaintiff")),
+    defendant: nullableString(cell(row, "Defendant")),
+    court: nullableString(cell(row, "Court")),
+    courtCircuit: nullableString(cell(row, "Court Circuit")),
+    caseSubject: nullableString(cell(row, "Case Subject")),
+    sessionType: nullableString(cell(row, "Session Type")),
+    sessionDateHijri,
+    sessionDay: sessionDay && sessionDay !== "\u2014" ? sessionDay : null,
+    sessionTime,
+    notes: nullableString(cell(row, "Notes")),
+    status: parseStatus(cell(row, "Status")),
+    reminder24: cell(row, "Reminder24") === "true",
+    reminder6: cell(row, "Reminder6") === "true",
+    createdAt: cell(row, "Created At") || (/* @__PURE__ */ new Date()).toISOString(),
+    hearingAt: hearingDate ? hearingDate.toISOString() : null
+  };
 }
 function computeDaysRemainingStr(sessionDateHijri, sessionTime) {
   let hearingAt = computeHearingDateTime(sessionDateHijri, sessionTime);
@@ -40599,17 +40768,22 @@ async function deleteSession(id) {
   return true;
 }
 async function getDashboardStats() {
-  const [sessionsRes, poaRes] = await Promise.allSettled([
+  const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
     listSessions(),
-    listPoaRows()
+    listPoaRows(),
+    listJudgmentRows()
   ]);
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
   const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
+  const judgmentRows = judgmentRes.status === "fulfilled" ? judgmentRes.value : [];
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
   }
   if (poaRes.status === "rejected") {
     logger.warn({ err: poaRes.reason }, "Failed to load POA rows for dashboard stats");
+  }
+  if (judgmentRes.status === "rejected") {
+    logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
   }
   let todayHearings = 0;
   let upcomingHearings = 0;
@@ -40620,12 +40794,24 @@ async function getDashboardStats() {
     else if (effective === "Upcoming") upcomingHearings += 1;
     else if (effective === "Finished") finishedHearings += 1;
   }
+  let favorableJudgments = 0;
+  let unfavorableJudgments = 0;
+  for (const row of judgmentRows) {
+    const isFavorableVal = (row.values[7] || "").trim();
+    if (isFavorableVal === "\u0646\u0639\u0645") {
+      favorableJudgments += 1;
+    } else {
+      unfavorableJudgments += 1;
+    }
+  }
   return {
     totalCases: sessions.length,
     todayHearings,
     upcomingHearings,
     finishedHearings,
-    totalPoas: poaRows.length
+    totalPoas: poaRows.length,
+    favorableJudgments,
+    unfavorableJudgments
   };
 }
 async function markReminderSent(id, kind) {
@@ -57456,14 +57642,41 @@ var cron_default = router8;
 
 // src/routes/poa.ts
 var import_express9 = __toESM(require_express2(), 1);
+var import_moment_hijri2 = __toESM(require_moment_hijri(), 1);
 var router9 = (0, import_express9.Router)();
+function calcDaysFromHijri(hijriDateStr) {
+  if (!hijriDateStr?.trim()) return 0;
+  try {
+    const parts = hijriDateStr.trim().split(/[\/\.-]/);
+    if (parts.length === 3) {
+      let day, month, year;
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        day = parseInt(parts[2], 10);
+      } else {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        year = parseInt(parts[2], 10);
+      }
+      if (year > 1300 && year < 1600 && month >= 1 && month <= 12 && day >= 1 && day <= 30) {
+        const mExpiry = (0, import_moment_hijri2.default)(`${year}/${month}/${day}`, "iYYYY/iM/iD");
+        if (mExpiry.isValid()) {
+          return mExpiry.diff((0, import_moment_hijri2.default)().startOf("day"), "days");
+        }
+      }
+    }
+  } catch (_) {
+  }
+  return 0;
+}
 function rowToRecord(values) {
   return {
     clientName: values[0] || "",
     poaNumber: values[1] || "",
     issueDateHijri: values[2] || "",
     expiryDateHijri: values[3] || "",
-    daysRemaining: Number(values[4]) || 0,
+    daysRemaining: values[4] && values[4].trim() !== "" ? Number(values[4]) : calcDaysFromHijri(values[3] || ""),
     notes: values[5] || "",
     createdAt: values[6] || (/* @__PURE__ */ new Date()).toISOString()
   };
@@ -57569,24 +57782,166 @@ router9.delete("/poa/:rowId", attachAuthUser, requireAuth, async (req, res) => {
 });
 var poa_default = router9;
 
-// src/routes/index.ts
+// src/routes/judgments.ts
+var import_express10 = __toESM(require_express2(), 1);
 var router10 = (0, import_express10.Router)();
-router10.use(health_default);
-router10.use(auth_default);
-router10.use(dashboard_default);
-router10.use(ai_default);
-router10.use(sessions_default);
-router10.use(settings_default);
-router10.use(reports_default);
-router10.use(cron_default);
-router10.use(poa_default);
-var routes_default = router10;
+function rowToRecord2(id, values) {
+  return {
+    id,
+    court: values[0] || "",
+    plaintiff: values[1] || "",
+    defendant: values[2] || "",
+    assignedLawyer: values[3] || "",
+    judgmentNumber: values[4] || "",
+    judgmentDate: values[5] || "",
+    summary: values[6] || "",
+    isFavorable: values[7] || "\u0646\u0639\u0645",
+    createdAt: values[8] || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function recordToRow2(record) {
+  return [
+    record.court || "",
+    record.plaintiff || "",
+    record.defendant || "",
+    record.assignedLawyer || "",
+    record.judgmentNumber || "",
+    record.judgmentDate || "",
+    record.summary || "",
+    record.isFavorable || "\u0646\u0639\u0645",
+    record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+  ];
+}
+router10.get("/judgments", attachAuthUser, requireAuth, async (req, res) => {
+  try {
+    await ensureJudgmentSheetReady();
+    const forceRefresh = req.query.refresh === "true";
+    const rows = await listJudgmentRows(forceRefresh);
+    const records = rows.map(({ id, values }) => rowToRecord2(id, values));
+    res.json(records);
+  } catch (err) {
+    logger.error({ err }, "Failed to list Judgment records");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0623\u062D\u0643\u0627\u0645." });
+  }
+});
+router10.get("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0635\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  try {
+    await ensureJudgmentSheetReady();
+    const rows = await listJudgmentRows();
+    const match = rows.find((r) => r.id === id);
+    if (!match) {
+      res.status(404).json({ error: "\u0627\u0644\u062D\u0643\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F." });
+      return;
+    }
+    res.json(rowToRecord2(match.id, match.values));
+  } catch (err) {
+    logger.error({ err }, "Failed to get Judgment record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062D\u0643\u0645." });
+  }
+});
+router10.post("/judgments", attachAuthUser, requireAuth, async (req, res) => {
+  const body = req.body;
+  if (!body.judgmentNumber?.trim()) {
+    res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643 \u0645\u0637\u0644\u0648\u0628." });
+    return;
+  }
+  try {
+    await ensureJudgmentSheetReady();
+    const recordPayload = {
+      court: body.court?.trim() || "",
+      plaintiff: body.plaintiff?.trim() || "",
+      defendant: body.defendant?.trim() || "",
+      assignedLawyer: body.assignedLawyer?.trim() || "",
+      judgmentNumber: body.judgmentNumber.trim(),
+      judgmentDate: body.judgmentDate?.trim() || "",
+      summary: body.summary?.trim() || "",
+      isFavorable: body.isFavorable === "\u0644\u0627" ? "\u0644\u0627" : "\u0646\u0639\u0645",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const rowId = await appendJudgmentRow(recordToRow2(recordPayload));
+    logger.info({ rowId }, "Judgment record created");
+    res.status(201).json({ id: rowId, ...recordPayload });
+  } catch (err) {
+    logger.error({ err }, "Failed to create Judgment record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u062D\u0643\u0645." });
+  }
+});
+router10.put("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0635\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  const body = req.body;
+  try {
+    await ensureJudgmentSheetReady();
+    const rows = await listJudgmentRows();
+    const existing = rows.find((r) => r.id === id);
+    if (!existing) {
+      res.status(404).json({ error: "\u0627\u0644\u062D\u0643\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F." });
+      return;
+    }
+    const existingRecord = rowToRecord2(id, existing.values);
+    const updatedPayload = {
+      court: body.court !== void 0 ? body.court.trim() : existingRecord.court,
+      plaintiff: body.plaintiff !== void 0 ? body.plaintiff.trim() : existingRecord.plaintiff,
+      defendant: body.defendant !== void 0 ? body.defendant.trim() : existingRecord.defendant,
+      assignedLawyer: body.assignedLawyer !== void 0 ? body.assignedLawyer.trim() : existingRecord.assignedLawyer,
+      judgmentNumber: body.judgmentNumber !== void 0 ? body.judgmentNumber.trim() : existingRecord.judgmentNumber,
+      judgmentDate: body.judgmentDate !== void 0 ? body.judgmentDate.trim() : existingRecord.judgmentDate,
+      summary: body.summary !== void 0 ? body.summary.trim() : existingRecord.summary,
+      isFavorable: body.isFavorable !== void 0 ? body.isFavorable === "\u0644\u0627" ? "\u0644\u0627" : "\u0646\u0639\u0645" : existingRecord.isFavorable,
+      createdAt: existingRecord.createdAt
+    };
+    await updateJudgmentRow(id, recordToRow2(updatedPayload));
+    logger.info({ id }, "Judgment record updated");
+    res.json({ id, ...updatedPayload });
+  } catch (err) {
+    logger.error({ err }, "Failed to update Judgment record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0643\u0645." });
+  }
+});
+router10.delete("/judgments/:id", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0635\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  try {
+    await deleteJudgmentRow(id);
+    logger.info({ id }, "Judgment record deleted");
+    res.status(204).send();
+  } catch (err) {
+    logger.error({ err }, "Failed to delete Judgment record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u062D\u0643\u0645." });
+  }
+});
+var judgments_default = router10;
+
+// src/routes/index.ts
+var router11 = (0, import_express11.Router)();
+router11.use(health_default);
+router11.use(auth_default);
+router11.use(dashboard_default);
+router11.use(ai_default);
+router11.use(sessions_default);
+router11.use(settings_default);
+router11.use(reports_default);
+router11.use(cron_default);
+router11.use(poa_default);
+router11.use(judgments_default);
+var routes_default = router11;
 
 // src/app.ts
 var import_meta2 = {};
 var __filename = (0, import_url2.fileURLToPath)(import_meta2.url);
 var __dirname2 = import_path3.default.dirname(__filename);
-var app = (0, import_express11.default)();
+var app = (0, import_express12.default)();
 app.set("trust proxy", 1);
 var pinoHttpMiddleware = import_pino_http.default.default || import_pino_http.default;
 app.use(
@@ -57609,8 +57964,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)({ credentials: true, origin: true }));
-app.use(import_express11.default.json());
-app.use(import_express11.default.urlencoded({ extended: true }));
+app.use(import_express12.default.json());
+app.use(import_express12.default.urlencoded({ extended: true }));
 app.use((0, import_cookie_parser.default)(env.sessionSecret));
 app.use("/api", routes_default);
 var possibleDistPaths = [
@@ -57629,7 +57984,7 @@ var distPath = possibleDistPaths.find((p) => {
 });
 if (distPath) {
   logger.info(`[Server] Serving static frontend from: ${distPath}`);
-  app.use(import_express11.default.static(distPath));
+  app.use(import_express12.default.static(distPath));
   app.use((req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(import_path3.default.join(distPath, "index.html"));

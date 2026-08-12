@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Kbd } from '@/components/ui/kbd';
 import { Search, Scale, FileText, LayoutDashboard, MessageSquare, Calendar, Settings, ArrowLeft } from 'lucide-react';
+import { getArabicDayName } from '@/lib/hijri';
 
 interface GlobalSearchProps {
   /** Optional custom trigger render or trigger button class */
@@ -78,12 +79,13 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
             {Array.isArray(sessions) && sessions.length > 0 && (
               <CommandGroup heading="الجلسات القضائية">
                 {sessions.map((session: Session) => {
+                  const dayName = getArabicDayName(session);
                   const title = session.caseNumber ? `قضية رقم ${session.caseNumber}` : `جلسة #${session.id}`;
                   const details = [
                     session.plaintiff && `المدعي: ${session.plaintiff}`,
                     session.defendant && `المدعى عليه: ${session.defendant}`,
                     session.court && `المحكمة: ${session.court}`,
-                    session.sessionDateHijri && `التاريخ: ${session.sessionDateHijri}`,
+                    session.sessionDateHijri && `التاريخ: ${dayName ? dayName + ' ' : ''}${session.sessionDateHijri}`,
                   ]
                     .filter(Boolean)
                     .join(' · ');

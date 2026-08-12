@@ -4,6 +4,7 @@ import { useListSessions } from '@workspace/api-client-react';
 import { FileText, ChevronLeft, CheckCircle2, Clock, Scale, User, ArrowUpDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { sortSessions, type SortOption } from '@/lib/session-sort';
+import { getArabicDayName } from '@/lib/hijri';
 import {
   Select,
   SelectContent,
@@ -141,10 +142,11 @@ export default function ReportsPage() {
                             <span className="truncate">{session.court}</span>
                           </div>
                         )}
-                        {session.sessionDateHijri && (
-                          <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs">
-                            📅 {session.sessionDateHijri}
-                            {session.sessionTime && ` · ${session.sessionTime}`}
+                        {(session.sessionDateHijri || session.hearingAt) && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                            📅 {getArabicDayName(session) && <span className="font-medium text-foreground">{getArabicDayName(session)} ·</span>}
+                            {session.sessionDateHijri && <span className="font-mono">{session.sessionDateHijri}</span>}
+                            {session.sessionTime && <span className="font-mono text-muted-foreground/70">· {session.sessionTime}</span>}
                           </div>
                         )}
                       </div>

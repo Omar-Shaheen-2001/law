@@ -499,6 +499,9 @@ components:
           type: ["string", "null"]
         sessionDateHijri:
           type: ["string", "null"]
+        sessionDay:
+          type: ["string", "null"]
+          description: Arabic day name (e.g. الخميس, الأحد)
         sessionTime:
           type: ["string", "null"]
         notes:
