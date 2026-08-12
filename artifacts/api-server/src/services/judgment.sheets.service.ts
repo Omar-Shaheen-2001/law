@@ -244,20 +244,53 @@ export async function listJudgmentRows(forceRefresh = false): Promise<{ id: numb
   }
 }
 
-/** Fetches both headers and data rows in a single API call. */
-export async function listJudgmentRowsWithHeaders(): Promise<{ headers: string[]; rows: { id: number; values: JudgmentRow }[] }> {
+/** Fetches both headers and data rows in a single API call, using in-memory cache if fresh. */
+export async function listJudgmentRowsWithHeaders(forceRefresh = false): Promise<{
+  headers: string[];
+  rows: { id: number; values: JudgmentRow }[];
+}> {
   await ensureJudgmentSheetReady();
-  const sheets = getClient();
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.googleSpreadsheetId,
-    range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}`,
-  });
-  const data = response.data.values ?? [];
-  const headers = data[0] ?? [];
-  const rows = data.slice(1)
-    .map((row, index) => ({ id: index + 2, values: row as JudgmentRow }))
-    .filter((row) => row.values.some((cell) => cell !== undefined && cell !== ""));
-  return { headers, rows };
+
+  const now = Date.now();
+  const useCache =
+    !forceRefresh &&
+    judgmentDataCache !== null &&
+    now - lastJudgmentCacheTime < JUDGMENT_CACHE_TTL_MS;
+
+  try {
+    const sheets = getClient();
+
+    if (useCache) {
+      // Fetch row 1 only for headers when using cache
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: env.googleSpreadsheetId,
+        range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}1`,
+      });
+      const headers = ((headerRes.data.values?.[0] as string[]) ?? [...JUDGMENT_SHEET_COLUMNS]);
+      return { headers, rows: judgmentDataCache! };
+    }
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${JUDGMENT_SHEET_NAME}!A1:${COL_LAST}`,
+    });
+    const data = response.data.values ?? [];
+    const headers = (data[0] as string[]) ?? [...JUDGMENT_SHEET_COLUMNS];
+    const dataRows = data.slice(1);
+    const rows = dataRows
+      .map((row, index) => ({ id: index + 2, values: row as JudgmentRow }))
+      .filter((row) => row.values.some((cell) => cell !== undefined && cell !== ""));
+
+    judgmentDataCache = rows;
+    lastJudgmentCacheTime = now;
+    return { headers, rows };
+  } catch (err) {
+    logger.warn({ err }, "Failed to fetch Judgment rows from Google Sheets, returning cached/empty");
+    return {
+      headers: [...JUDGMENT_SHEET_COLUMNS],
+      rows: judgmentDataCache ?? [],
+    };
+  }
 }
 
 /** Appends a new Judgment record row and returns its 1-based row id.
