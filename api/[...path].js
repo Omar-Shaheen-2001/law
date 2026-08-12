@@ -40307,7 +40307,6 @@ async function deletePoaRow(id) {
 var import_googleapis3 = require("googleapis");
 var JUDGMENT_SHEET_NAME = "Judgment";
 var JUDGMENT_SHEET_COLUMNS = [
-  "\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629",
   "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629",
   "\u0627\u0644\u0645\u062F\u0639\u064A",
   "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647",
@@ -40316,7 +40315,8 @@ var JUDGMENT_SHEET_COLUMNS = [
   "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645",
   "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645",
   "\u0627\u0644\u062D\u0643\u0645",
-  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621",
+  "\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629"
 ];
 var JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length;
 var COL_LAST2 = String.fromCharCode("A".charCodeAt(0) + JUDGMENT_COLS - 1);
@@ -40798,7 +40798,7 @@ async function getDashboardStats() {
   let favorableJudgments = 0;
   let unfavorableJudgments = 0;
   for (const row of judgmentRows) {
-    const rawVal = row.values.length >= 10 ? row.values[8] : row.values[7];
+    const rawVal = row.values[7];
     const val = (rawVal || "").trim();
     if (val === "\u0646\u0647\u0627\u0626\u064A" || val === "\u0646\u0639\u0645") {
       favorableJudgments += 1;
@@ -57795,24 +57795,8 @@ function normalizeJudgmentType(val) {
   return "\u0646\u0647\u0627\u0626\u064A";
 }
 function rowToRecord2(id, values) {
-  if (values.length >= 10) {
-    return {
-      id,
-      caseNumber: values[0] || "",
-      court: values[1] || "",
-      plaintiff: values[2] || "",
-      defendant: values[3] || "",
-      assignedLawyer: values[4] || "",
-      judgmentNumber: values[5] || "",
-      judgmentDate: values[6] || "",
-      summary: values[7] || "",
-      isFavorable: normalizeJudgmentType(values[8]),
-      createdAt: values[9] || (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
   return {
     id,
-    caseNumber: "",
     court: values[0] || "",
     plaintiff: values[1] || "",
     defendant: values[2] || "",
@@ -57821,12 +57805,12 @@ function rowToRecord2(id, values) {
     judgmentDate: values[5] || "",
     summary: values[6] || "",
     isFavorable: normalizeJudgmentType(values[7]),
-    createdAt: values[8] || (/* @__PURE__ */ new Date()).toISOString()
+    createdAt: values[8] || (/* @__PURE__ */ new Date()).toISOString(),
+    caseNumber: values[9] || ""
   };
 }
 function recordToRow2(record) {
   return [
-    record.caseNumber || "",
     record.court || "",
     record.plaintiff || "",
     record.defendant || "",
@@ -57835,7 +57819,8 @@ function recordToRow2(record) {
     record.judgmentDate || "",
     record.summary || "",
     normalizeJudgmentType(record.isFavorable),
-    record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    record.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    record.caseNumber || ""
   ];
 }
 router10.get("/judgments", attachAuthUser, requireAuth, async (req, res) => {

@@ -32,24 +32,8 @@ function normalizeJudgmentType(val: string): "نهائي" | "ابتدائي" {
 }
 
 function rowToRecord(id: number, values: string[]): JudgmentRecord {
-  if (values.length >= 10) {
-    return {
-      id,
-      caseNumber: values[0] || "",
-      court: values[1] || "",
-      plaintiff: values[2] || "",
-      defendant: values[3] || "",
-      assignedLawyer: values[4] || "",
-      judgmentNumber: values[5] || "",
-      judgmentDate: values[6] || "",
-      summary: values[7] || "",
-      isFavorable: normalizeJudgmentType(values[8]),
-      createdAt: values[9] || new Date().toISOString(),
-    };
-  }
   return {
     id,
-    caseNumber: "",
     court: values[0] || "",
     plaintiff: values[1] || "",
     defendant: values[2] || "",
@@ -59,12 +43,12 @@ function rowToRecord(id: number, values: string[]): JudgmentRecord {
     summary: values[6] || "",
     isFavorable: normalizeJudgmentType(values[7]),
     createdAt: values[8] || new Date().toISOString(),
+    caseNumber: values[9] || "",
   };
 }
 
 function recordToRow(record: Omit<JudgmentRecord, "id">): string[] {
   return [
-    record.caseNumber || "",
     record.court || "",
     record.plaintiff || "",
     record.defendant || "",
@@ -74,6 +58,7 @@ function recordToRow(record: Omit<JudgmentRecord, "id">): string[] {
     record.summary || "",
     normalizeJudgmentType(record.isFavorable),
     record.createdAt || new Date().toISOString(),
+    record.caseNumber || "",
   ];
 }
 
