@@ -1,5 +1,5 @@
 import { useGetDashboardStats } from '@workspace/api-client-react';
-import { Briefcase, Calendar, CheckCircle2, Clock, ArrowLeft, Sparkles, FileKey, Gavel, XCircle } from 'lucide-react';
+import { Briefcase, Calendar, CheckCircle2, Clock, ArrowLeft, Sparkles, FileKey, Gavel, XCircle, CheckSquare, Timer, AlertTriangle, ListChecks } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'wouter';
 
@@ -83,6 +83,49 @@ const stats = [
   },
 ] as const;
 
+const taskStats = [
+  {
+    key: 'totalTasks',
+    label: 'إجمالي المهام',
+    icon: ListChecks,
+    gradient: 'from-amber-500/15 to-amber-600/5',
+    iconBg: 'bg-amber-500/15',
+    iconColor: 'text-amber-500',
+    borderColor: 'border-amber-500/20',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    key: 'inProgressTasks',
+    label: 'قيد التنفيذ',
+    icon: Timer,
+    gradient: 'from-blue-500/15 to-blue-600/5',
+    iconBg: 'bg-blue-500/15',
+    iconColor: 'text-blue-500',
+    borderColor: 'border-blue-500/20',
+    dotColor: 'bg-blue-500',
+  },
+  {
+    key: 'completedTasks',
+    label: 'مهام مكتملة',
+    icon: CheckSquare,
+    gradient: 'from-emerald-500/15 to-emerald-600/5',
+    iconBg: 'bg-emerald-500/15',
+    iconColor: 'text-emerald-500',
+    borderColor: 'border-emerald-500/20',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    key: 'urgentTasks',
+    label: 'مهام عاجلة',
+    icon: AlertTriangle,
+    gradient: 'from-red-500/15 to-red-600/5',
+    iconBg: 'bg-red-500/15',
+    iconColor: 'text-red-500',
+    borderColor: 'border-red-500/20',
+    dotColor: 'bg-red-500',
+  },
+] as const;
+
 export default function DashboardPage() {
   const { data, isLoading, error } = useGetDashboardStats();
 
@@ -139,6 +182,47 @@ export default function DashboardPage() {
             </Link>
           );
         })}
+      </div>
+
+      {/* Tasks Stats Section */}
+      <div className="fade-in-up">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-5 h-5 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#B88A3B,#D4A855)' }}>
+            <CheckSquare className="w-3 h-3 text-white" />
+          </div>
+          <h2 className="text-sm font-semibold text-foreground">إحصائيات المهام</h2>
+          <Link href="/tasks" className="mr-auto text-xs text-primary hover:underline flex items-center gap-0.5">
+            عرض الكل <ArrowLeft className="w-3 h-3" />
+          </Link>
+        </div>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          {taskStats.map((stat, i) => {
+            const Icon = stat.icon;
+            const value = (data as Record<string, number> | undefined)?.[stat.key];
+            return (
+              <Link key={stat.key} href="/tasks">
+                <div
+                  className={`fade-in-up fade-in-up-delay-${i + 1} rounded-xl border ${stat.borderColor} bg-gradient-to-br ${stat.gradient} p-4 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer h-full flex flex-col justify-between`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`w-9 h-9 rounded-xl ${stat.iconBg} flex items-center justify-center`}>
+                      <Icon className={`w-4 h-4 ${stat.iconColor}`} />
+                    </div>
+                    <div className={`w-2 h-2 rounded-full ${stat.dotColor} mt-1`} />
+                  </div>
+                  <div>
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-12 mb-1" />
+                    ) : (
+                      <div className="text-3xl font-bold font-mono tracking-tight">{value ?? 0}</div>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">{stat.label}</p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Quick Actions */}

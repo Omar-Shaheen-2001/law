@@ -22,6 +22,7 @@ const ReportsPage = React.lazy(() => import('@/pages/reports'));
 const SessionReportPage = React.lazy(() => import('@/pages/session-report'));
 const PoaPage = React.lazy(() => import('@/pages/poa'));
 const JudgmentsPage = React.lazy(() => import('@/pages/judgments'));
+const TasksPage = React.lazy(() => import('@/pages/tasks'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -152,6 +153,13 @@ function Router() {
         <AuthGuard>
           <AppShell>
             <JudgmentsPage />
+          </AppShell>
+        </AuthGuard>
+      </Route>
+      <Route path="/tasks">
+        <AuthGuard>
+          <AppShell>
+            <TasksPage />
           </AppShell>
         </AuthGuard>
       </Route>

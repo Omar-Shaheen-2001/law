@@ -20702,27 +20702,27 @@ var require_router = __commonJS({
     var slice2 = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module2.exports = Router12;
+    module2.exports = Router13;
     module2.exports.Route = Route;
-    function Router12(options) {
-      if (!(this instanceof Router12)) {
-        return new Router12(options);
+    function Router13(options) {
+      if (!(this instanceof Router13)) {
+        return new Router13(options);
       }
       const opts = options || {};
-      function router12(req, res, next) {
-        router12.handle(req, res, next);
+      function router13(req, res, next) {
+        router13.handle(req, res, next);
       }
-      Object.setPrototypeOf(router12, this);
-      router12.caseSensitive = opts.caseSensitive;
-      router12.mergeParams = opts.mergeParams;
-      router12.params = {};
-      router12.strict = opts.strict;
-      router12.stack = [];
-      return router12;
+      Object.setPrototypeOf(router13, this);
+      router13.caseSensitive = opts.caseSensitive;
+      router13.mergeParams = opts.mergeParams;
+      router13.params = {};
+      router13.strict = opts.strict;
+      router13.stack = [];
+      return router13;
     }
-    Router12.prototype = function() {
+    Router13.prototype = function() {
     };
-    Router12.prototype.param = function param(name, fn) {
+    Router13.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20742,7 +20742,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router12.prototype.handle = function handle(req, res, callback) {
+    Router13.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20869,7 +20869,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router12.prototype.use = function use(handler2) {
+    Router13.prototype.use = function use(handler2) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler2 !== "function") {
@@ -20902,7 +20902,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router12.prototype.route = function route(path3) {
+    Router13.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20917,7 +20917,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router12.prototype[method] = function(path3) {
+      Router13.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice2.call(arguments, 1));
         return this;
@@ -21100,13 +21100,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve3 = require("node:path").resolve;
     var once = require_once();
-    var Router12 = require_router();
+    var Router13 = require_router();
     var slice2 = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports2 = module2.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router12 = null;
+      var router13 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21115,13 +21115,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router12 === null) {
-            router12 = new Router12({
+          if (router13 === null) {
+            router13 = new Router13({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router12;
+          return router13;
         }
       });
     };
@@ -21192,15 +21192,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router12 = this.router;
+      var router13 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router12.use(path3, fn2);
+          return router13.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router12.use(path3, function mounted_app(req, res, next) {
+        router13.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23785,7 +23785,7 @@ var require_express = __commonJS({
     var EventEmitter = require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router12 = require_router();
+    var Router13 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -23807,8 +23807,8 @@ var require_express = __commonJS({
     exports2.application = proto;
     exports2.request = req;
     exports2.response = res;
-    exports2.Route = Router12.Route;
-    exports2.Router = Router12;
+    exports2.Route = Router13.Route;
+    exports2.Router = Router13;
     exports2.json = bodyParser.json;
     exports2.raw = bodyParser.raw;
     exports2.static = require_serve_static();
@@ -35316,7 +35316,7 @@ __export(vercelHandler_exports, {
 module.exports = __toCommonJS(vercelHandler_exports);
 
 // src/app.ts
-var import_express12 = __toESM(require_express2(), 1);
+var import_express13 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -35325,7 +35325,7 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_url2 = require("url");
 
 // src/routes/index.ts
-var import_express11 = __toESM(require_express2(), 1);
+var import_express12 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -39238,7 +39238,11 @@ var GetDashboardStatsResponse = objectType({
   "finishedHearings": numberType(),
   "totalPoas": numberType(),
   "favorableJudgments": numberType().optional(),
-  "unfavorableJudgments": numberType().optional()
+  "unfavorableJudgments": numberType().optional(),
+  "totalTasks": numberType().optional(),
+  "inProgressTasks": numberType().optional(),
+  "completedTasks": numberType().optional(),
+  "urgentTasks": numberType().optional()
 });
 var AnalyzeMessageBody = objectType({
   "message": stringType().min(1).describe("Raw court SMS text pasted by the secretary")
@@ -40543,6 +40547,221 @@ async function deleteJudgmentRow(id) {
   });
 }
 
+// src/services/task.sheets.service.ts
+var import_googleapis4 = require("googleapis");
+var TASK_SHEET_NAME = "Tasks";
+var TASK_SHEET_COLUMNS = [
+  "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629",
+  "\u0627\u0644\u0645\u0643\u0644\u0641",
+  "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0633\u0644\u064A\u0645",
+  "\u0639\u062F\u062F \u0627\u0644\u0623\u064A\u0627\u0645 \u0627\u0644\u0645\u062A\u0628\u0642\u064A\u0629",
+  "\u0627\u0644\u062D\u0627\u0644\u0629",
+  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"
+];
+var TASK_COLS = TASK_SHEET_COLUMNS.length;
+var COL_LAST3 = String.fromCharCode("A".charCodeAt(0) + TASK_COLS - 1);
+var sheetsClient4 = null;
+function getClient4() {
+  if (!sheetsClient4) {
+    const credentials = env.googleServiceAccountJson;
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error(
+        "GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email/private_key."
+      );
+    }
+    const privateKey = credentials.private_key.replace(/\\n/g, "\n");
+    const auth = new import_googleapis4.google.auth.JWT({
+      email: credentials.client_email,
+      key: privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+    });
+    sheetsClient4 = import_googleapis4.google.sheets({ version: "v4", auth });
+  }
+  return sheetsClient4;
+}
+var taskSheetIdCache = null;
+var isTaskSheetReadyCache = false;
+var taskDataCache = null;
+var lastTaskCacheTime = 0;
+var TASK_CACHE_TTL_MS = 15e3;
+function invalidateTaskCache() {
+  taskDataCache = null;
+  lastTaskCacheTime = 0;
+}
+async function getTaskSheetId() {
+  if (taskSheetIdCache !== null) return taskSheetIdCache;
+  const sheets = getClient4();
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: env.googleSpreadsheetId
+  });
+  const sheet = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === TASK_SHEET_NAME
+  );
+  if (!sheet?.properties && sheet?.properties?.sheetId === void 0) {
+    throw new Error(`Sheet tab "${TASK_SHEET_NAME}" not found.`);
+  }
+  taskSheetIdCache = sheet.properties.sheetId;
+  return taskSheetIdCache;
+}
+async function ensureTaskSheetReady() {
+  if (isTaskSheetReadyCache) return;
+  try {
+    const sheets = getClient4();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: env.googleSpreadsheetId
+    });
+    const existing = spreadsheet.data.sheets?.find(
+      (s) => s.properties?.title === TASK_SHEET_NAME
+    );
+    if (!existing) {
+      const addRes = await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: env.googleSpreadsheetId,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: TASK_SHEET_NAME } } }]
+        }
+      });
+      taskSheetIdCache = addRes.data.replies?.[0]?.addSheet?.properties?.sheetId ?? null;
+      logger.info(`Created sheet tab "${TASK_SHEET_NAME}"`);
+    } else {
+      taskSheetIdCache = existing.properties?.sheetId ?? null;
+    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${TASK_SHEET_NAME}!A1:${COL_LAST3}1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[...TASK_SHEET_COLUMNS]] }
+    });
+    isTaskSheetReadyCache = true;
+    if (taskSheetIdCache !== null) {
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: env.googleSpreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                repeatCell: {
+                  range: {
+                    sheetId: taskSheetIdCache,
+                    startRowIndex: 0,
+                    endRowIndex: 1,
+                    startColumnIndex: 0,
+                    endColumnIndex: TASK_COLS
+                  },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.1, green: 0.15, blue: 0.25 },
+                      textFormat: {
+                        foregroundColor: { red: 1, green: 1, blue: 1 },
+                        bold: true,
+                        fontSize: 10
+                      },
+                      horizontalAlignment: "CENTER",
+                      verticalAlignment: "MIDDLE"
+                    }
+                  },
+                  fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                }
+              }
+            ]
+          }
+        });
+      } catch (fmtErr) {
+        logger.warn({ fmtErr }, "Non-fatal formatting warning for Tasks sheet");
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "ensureTaskSheetReady warning");
+    isTaskSheetReadyCache = true;
+  }
+}
+async function listTaskRowsWithHeaders(forceRefresh = false) {
+  await ensureTaskSheetReady();
+  const now = Date.now();
+  const useCache = !forceRefresh && taskDataCache !== null && now - lastTaskCacheTime < TASK_CACHE_TTL_MS;
+  try {
+    const sheets = getClient4();
+    if (useCache) {
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: env.googleSpreadsheetId,
+        range: `${TASK_SHEET_NAME}!A1:${COL_LAST3}1`
+      });
+      const headers2 = headerRes.data.values?.[0] ?? [...TASK_SHEET_COLUMNS];
+      return { headers: headers2, rows: taskDataCache };
+    }
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: env.googleSpreadsheetId,
+      range: `${TASK_SHEET_NAME}!A1:${COL_LAST3}`
+    });
+    const data = response.data.values ?? [];
+    const headers = data[0] ?? [...TASK_SHEET_COLUMNS];
+    const dataRows = data.slice(1);
+    const rows = dataRows.map((row, index) => ({ id: index + 2, values: row })).filter((row) => row.values.some((cell2) => cell2 !== void 0 && cell2 !== ""));
+    taskDataCache = rows;
+    lastTaskCacheTime = now;
+    return { headers, rows };
+  } catch (err) {
+    logger.warn({ err }, "Failed to fetch Task rows from Google Sheets, returning cached/empty");
+    return {
+      headers: [...TASK_SHEET_COLUMNS],
+      rows: taskDataCache ?? []
+    };
+  }
+}
+async function appendTaskRow(values) {
+  invalidateTaskCache();
+  const sheets = getClient4();
+  const paddedValues = Array.from({ length: TASK_COLS }, (_, i) => values[i] ?? "");
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: env.googleSpreadsheetId,
+    range: `${TASK_SHEET_NAME}!A:${COL_LAST3}`,
+    valueInputOption: "RAW",
+    insertDataOption: "OVERWRITE",
+    requestBody: { values: [paddedValues] }
+  });
+  const updatedRange = response.data.updates?.updatedRange;
+  const match = updatedRange?.match(/![A-Z]+(\d+):/);
+  if (match) return Number(match[1]);
+  const { rows } = await listTaskRowsWithHeaders();
+  const last = rows[rows.length - 1];
+  if (!last) throw new Error("Failed to determine id of newly created Task row.");
+  return last.id;
+}
+async function updateTaskRow(id, values) {
+  invalidateTaskCache();
+  const sheets = getClient4();
+  const paddedValues = Array.from({ length: TASK_COLS }, (_, i) => values[i] ?? "");
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: env.googleSpreadsheetId,
+    range: `${TASK_SHEET_NAME}!A${id}:${COL_LAST3}${id}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [paddedValues] }
+  });
+}
+async function deleteTaskRow(id) {
+  invalidateTaskCache();
+  const sheets = getClient4();
+  const sheetId = await getTaskSheetId();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: env.googleSpreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: id - 1,
+              endIndex: id
+            }
+          }
+        }
+      ]
+    }
+  });
+}
+
 // src/services/session.service.ts
 var COLUMN_INDEX = {
   // Arabic headers
@@ -40844,14 +41063,16 @@ async function deleteSession(id) {
   return true;
 }
 async function getDashboardStats() {
-  const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
+  const [sessionsRes, poaRes, judgmentRes, taskRes] = await Promise.allSettled([
     listSessions(),
     listPoaRows(),
-    listJudgmentRowsWithHeaders()
+    listJudgmentRowsWithHeaders(),
+    listTaskRowsWithHeaders()
   ]);
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
   const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
   const judgmentResult = judgmentRes.status === "fulfilled" ? judgmentRes.value : { headers: ["\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629", "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629", "\u0627\u0644\u0645\u062F\u0639\u064A", "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647", "\u0627\u0644\u0645\u062D\u0627\u0645\u064A \u0627\u0644\u0645\u0643\u0644\u0641", "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645", "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645", "\u0627\u0644\u062D\u0643\u0645", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"], rows: [] };
+  const taskResult = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
   }
@@ -40860,6 +41081,9 @@ async function getDashboardStats() {
   }
   if (judgmentRes.status === "rejected") {
     logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
+  }
+  if (taskRes.status === "rejected") {
+    logger.warn({ err: taskRes.reason }, "Failed to load Task rows for dashboard stats");
   }
   let todayHearings = 0;
   let upcomingHearings = 0;
@@ -40884,6 +41108,19 @@ async function getDashboardStats() {
       favorableJudgments += 1;
     }
   }
+  const TASK_HEADERS = ["\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629", "\u0627\u0644\u0645\u0643\u0644\u0641", "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0633\u0644\u064A\u0645", "\u0639\u062F\u062F \u0627\u0644\u0623\u064A\u0627\u0645 \u0627\u0644\u0645\u062A\u0628\u0642\u064A\u0629", "\u0627\u0644\u062D\u0627\u0644\u0629", "\u0645\u0644\u0627\u062D\u0638\u0627\u062A", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"];
+  const taskStatusIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "\u0627\u0644\u062D\u0627\u0644\u0629");
+  const taskPriorityIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629");
+  let inProgressTasks = 0;
+  let completedTasks = 0;
+  let urgentTasks = 0;
+  for (const row of taskResult.rows) {
+    const status = taskStatusIdx !== -1 ? (row.values[taskStatusIdx] || "").trim() : "";
+    const priority = taskPriorityIdx !== -1 ? (row.values[taskPriorityIdx] || "").trim() : "";
+    if (status === "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630") inProgressTasks += 1;
+    if (status === "\u0645\u0643\u062A\u0645\u0644\u0629") completedTasks += 1;
+    if (priority === "\u0639\u0627\u062C\u0644\u0629") urgentTasks += 1;
+  }
   return {
     totalCases: sessions.length,
     todayHearings,
@@ -40891,7 +41128,11 @@ async function getDashboardStats() {
     finishedHearings,
     totalPoas: poaRows.length,
     favorableJudgments,
-    unfavorableJudgments
+    unfavorableJudgments,
+    totalTasks: taskResult.rows.length,
+    inProgressTasks,
+    completedTasks,
+    urgentTasks
   };
 }
 async function markReminderSent(id, kind) {
@@ -58041,25 +58282,178 @@ router10.delete("/judgments/:id", attachAuthUser, requireAuth, async (req, res) 
 });
 var judgments_default = router10;
 
-// src/routes/index.ts
+// src/routes/tasks.ts
+var import_express11 = __toESM(require_express2(), 1);
 var router11 = (0, import_express11.Router)();
-router11.use(health_default);
-router11.use(auth_default);
-router11.use(dashboard_default);
-router11.use(ai_default);
-router11.use(sessions_default);
-router11.use(settings_default);
-router11.use(reports_default);
-router11.use(cron_default);
-router11.use(poa_default);
-router11.use(judgments_default);
-var routes_default = router11;
+var FIELD_KEYS2 = {
+  "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629": "title",
+  "\u0627\u0644\u0645\u0643\u0644\u0641": "assignee",
+  "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629": "priority",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0633\u0644\u064A\u0645": "dueDate",
+  "\u0639\u062F\u062F \u0627\u0644\u0623\u064A\u0627\u0645 \u0627\u0644\u0645\u062A\u0628\u0642\u064A\u0629": "remainingDays",
+  "\u0627\u0644\u062D\u0627\u0644\u0629": "status",
+  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A": "notes",
+  "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621": "createdAt"
+};
+function calcRemainingDays(dueDate) {
+  if (!dueDate) return "";
+  const due = new Date(dueDate);
+  due.setHours(23, 59, 59, 999);
+  const now = /* @__PURE__ */ new Date();
+  const days = Math.ceil((due.getTime() - now.getTime()) / (1e3 * 60 * 60 * 24));
+  if (days < 0) return `\u0645\u062A\u0623\u062E\u0631 ${Math.abs(days)} \u064A\u0648\u0645`;
+  if (days === 0) return "\u0627\u0644\u064A\u0648\u0645";
+  return `${days} \u064A\u0648\u0645`;
+}
+function rowToRecord3(id, values, headers) {
+  const record = {};
+  headers.forEach((header, colIdx) => {
+    const fieldKey = FIELD_KEYS2[header.trim()];
+    if (fieldKey) {
+      record[fieldKey] = (values[colIdx] ?? "").trim();
+    }
+  });
+  return {
+    id,
+    title: record.title || "",
+    assignee: record.assignee || "",
+    priority: record.priority || "\u0639\u0627\u062F\u064A\u0629",
+    dueDate: record.dueDate || "",
+    remainingDays: record.remainingDays || "",
+    status: record.status || "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630",
+    notes: record.notes || "",
+    createdAt: record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function recordToRow3(record) {
+  return [
+    record.title || "",
+    // A: عنوان المهمة
+    record.assignee || "",
+    // B: المكلف
+    record.priority || "",
+    // C: الأولوية
+    record.dueDate || "",
+    // D: تاريخ التسليم
+    calcRemainingDays(record.dueDate),
+    // E: عدد الأيام المتبقية (auto)
+    record.status || "",
+    // F: الحالة
+    record.notes || "",
+    // G: ملاحظات
+    record.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    // H: تاريخ الإنشاء
+  ];
+}
+router11.get("/tasks", attachAuthUser, requireAuth, async (req, res) => {
+  try {
+    await ensureTaskSheetReady();
+    const forceRefresh = req.query.refresh === "true";
+    const { headers, rows } = await listTaskRowsWithHeaders(forceRefresh);
+    const records = rows.map(({ id, values }) => rowToRecord3(id, values, headers));
+    res.json(records);
+  } catch (err) {
+    logger.error({ err }, "Failed to list Task records");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0647\u0627\u0645." });
+  }
+});
+router11.post("/tasks", attachAuthUser, requireAuth, async (req, res) => {
+  const body = req.body;
+  if (!body.title?.trim()) {
+    res.status(400).json({ error: "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629 \u0645\u0637\u0644\u0648\u0628." });
+    return;
+  }
+  try {
+    await ensureTaskSheetReady();
+    const recordPayload = {
+      title: body.title.trim(),
+      assignee: body.assignee?.trim() || "",
+      priority: body.priority || "\u0639\u0627\u062F\u064A\u0629",
+      dueDate: body.dueDate?.trim() || "",
+      remainingDays: calcRemainingDays(body.dueDate?.trim() || ""),
+      status: body.status || "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630",
+      notes: body.notes?.trim() || "",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const rowId = await appendTaskRow(recordToRow3(recordPayload));
+    logger.info({ rowId }, "Task record created");
+    res.status(201).json({ id: rowId, ...recordPayload });
+  } catch (err) {
+    logger.error({ err }, "Failed to create Task record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u0645\u0647\u0645\u0629." });
+  }
+});
+router11.put("/tasks/:id", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0635\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  const body = req.body;
+  try {
+    await ensureTaskSheetReady();
+    const { headers, rows } = await listTaskRowsWithHeaders();
+    const existing = rows.find((r) => r.id === id);
+    if (!existing) {
+      res.status(404).json({ error: "\u0627\u0644\u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629." });
+      return;
+    }
+    const existingRecord = rowToRecord3(id, existing.values, headers);
+    const updatedPayload = {
+      title: body.title !== void 0 ? body.title.trim() : existingRecord.title,
+      assignee: body.assignee !== void 0 ? body.assignee.trim() : existingRecord.assignee,
+      priority: body.priority !== void 0 ? body.priority : existingRecord.priority,
+      dueDate: body.dueDate !== void 0 ? body.dueDate.trim() : existingRecord.dueDate,
+      remainingDays: calcRemainingDays(body.dueDate !== void 0 ? body.dueDate.trim() : existingRecord.dueDate),
+      status: body.status !== void 0 ? body.status : existingRecord.status,
+      notes: body.notes !== void 0 ? body.notes.trim() : existingRecord.notes,
+      createdAt: existingRecord.createdAt
+    };
+    await updateTaskRow(id, recordToRow3(updatedPayload));
+    logger.info({ id }, "Task record updated");
+    res.json({ id, ...updatedPayload });
+  } catch (err) {
+    logger.error({ err }, "Failed to update Task record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0647\u0645\u0629." });
+  }
+});
+router11.delete("/tasks/:id", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0635\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  try {
+    await deleteTaskRow(id);
+    logger.info({ id }, "Task record deleted");
+    res.status(204).send();
+  } catch (err) {
+    logger.error({ err }, "Failed to delete Task record");
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0645\u0647\u0645\u0629." });
+  }
+});
+var tasks_default = router11;
+
+// src/routes/index.ts
+var router12 = (0, import_express12.Router)();
+router12.use(health_default);
+router12.use(auth_default);
+router12.use(dashboard_default);
+router12.use(ai_default);
+router12.use(sessions_default);
+router12.use(settings_default);
+router12.use(reports_default);
+router12.use(cron_default);
+router12.use(poa_default);
+router12.use(judgments_default);
+router12.use(tasks_default);
+var routes_default = router12;
 
 // src/app.ts
 var import_meta2 = {};
 var __filename = (0, import_url2.fileURLToPath)(import_meta2.url);
 var __dirname2 = import_path3.default.dirname(__filename);
-var app = (0, import_express12.default)();
+var app = (0, import_express13.default)();
 app.set("trust proxy", 1);
 var pinoHttpMiddleware = import_pino_http.default.default || import_pino_http.default;
 app.use(
@@ -58082,8 +58476,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)({ credentials: true, origin: true }));
-app.use(import_express12.default.json());
-app.use(import_express12.default.urlencoded({ extended: true }));
+app.use(import_express13.default.json());
+app.use(import_express13.default.urlencoded({ extended: true }));
 app.use((0, import_cookie_parser.default)(env.sessionSecret));
 app.use("/api", routes_default);
 var possibleDistPaths = [
@@ -58102,7 +58496,7 @@ var distPath = possibleDistPaths.find((p) => {
 });
 if (distPath) {
   logger.info(`[Server] Serving static frontend from: ${distPath}`);
-  app.use(import_express12.default.static(distPath));
+  app.use(import_express13.default.static(distPath));
   app.use((req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(import_path3.default.join(distPath, "index.html"));

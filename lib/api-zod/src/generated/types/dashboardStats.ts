@@ -14,4 +14,9 @@ export interface DashboardStats {
   totalPoas: number;
   favorableJudgments?: number;
   unfavorableJudgments?: number;
+  totalTasks?: number;
+  inProgressTasks?: number;
+  completedTasks?: number;
+  urgentTasks?: number;
 }
+

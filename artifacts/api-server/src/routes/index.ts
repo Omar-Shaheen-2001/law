@@ -9,6 +9,7 @@ import reportsRouter from "./reports";
 import cronRouter from "./cron";
 import poaRouter from "./poa";
 import judgmentsRouter from "./judgments";
+import tasksRouter from "./tasks";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(reportsRouter);
 router.use(cronRouter);
 router.use(poaRouter);
 router.use(judgmentsRouter);
+router.use(tasksRouter);
 
 export default router;

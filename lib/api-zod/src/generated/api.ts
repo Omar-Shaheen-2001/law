@@ -58,7 +58,11 @@ export const GetDashboardStatsResponse = zod.object({
   "finishedHearings": zod.number(),
   "totalPoas": zod.number(),
   "favorableJudgments": zod.number().optional(),
-  "unfavorableJudgments": zod.number().optional()
+  "unfavorableJudgments": zod.number().optional(),
+  "totalTasks": zod.number().optional(),
+  "inProgressTasks": zod.number().optional(),
+  "completedTasks": zod.number().optional(),
+  "urgentTasks": zod.number().optional(),
 })
 
 

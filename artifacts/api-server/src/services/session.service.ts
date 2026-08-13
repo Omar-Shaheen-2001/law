@@ -14,6 +14,7 @@ import { env } from "../config/env";
 import { logger } from "../lib/logger";
 import { listPoaRows } from "./poa.sheets.service";
 import { listJudgmentRowsWithHeaders } from "./judgment.sheets.service";
+import { listTaskRowsWithHeaders } from "./task.sheets.service";
 
 const COLUMN_INDEX: Record<string, number> = {
   // Arabic headers
@@ -339,13 +340,18 @@ export interface DashboardStats {
   totalPoas: number;
   favorableJudgments: number;
   unfavorableJudgments: number;
+  totalTasks: number;
+  inProgressTasks: number;
+  completedTasks: number;
+  urgentTasks: number;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const [sessionsRes, poaRes, judgmentRes] = await Promise.allSettled([
+  const [sessionsRes, poaRes, judgmentRes, taskRes] = await Promise.allSettled([
     listSessions(),
     listPoaRows(),
     listJudgmentRowsWithHeaders(),
+    listTaskRowsWithHeaders(),
   ]);
 
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
@@ -353,6 +359,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const judgmentResult = judgmentRes.status === "fulfilled"
     ? judgmentRes.value
     : { headers: ["رقم القضية","المحكمة المختصة","المدعي","المدعى عليه","المحامي المكلف","رقم الصك","تاريخ الحكم","ملخص الحكم","الحكم","تاريخ الإنشاء"], rows: [] };
+  const taskResult = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
 
   if (sessionsRes.status === "rejected") {
     logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
@@ -362,6 +369,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }
   if (judgmentRes.status === "rejected") {
     logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
+  }
+  if (taskRes.status === "rejected") {
+    logger.warn({ err: taskRes.reason }, "Failed to load Task rows for dashboard stats");
   }
 
   let todayHearings = 0;
@@ -392,6 +402,22 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     }
   }
 
+  // Count task stats from the Tasks sheet
+  const TASK_HEADERS = ["عنوان المهمة","المكلف","الأولوية","تاريخ التسليم","عدد الأيام المتبقية","الحالة","ملاحظات","تاريخ الإنشاء"];
+  const taskStatusIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "الحالة");
+  const taskPriorityIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "الأولوية");
+
+  let inProgressTasks = 0;
+  let completedTasks = 0;
+  let urgentTasks = 0;
+  for (const row of taskResult.rows) {
+    const status = taskStatusIdx !== -1 ? (row.values[taskStatusIdx] || "").trim() : "";
+    const priority = taskPriorityIdx !== -1 ? (row.values[taskPriorityIdx] || "").trim() : "";
+    if (status === "قيد التنفيذ") inProgressTasks += 1;
+    if (status === "مكتملة") completedTasks += 1;
+    if (priority === "عاجلة") urgentTasks += 1;
+  }
+
   return {
     totalCases: sessions.length,
     todayHearings,
@@ -400,6 +426,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     totalPoas: poaRows.length,
     favorableJudgments,
     unfavorableJudgments,
+    totalTasks: taskResult.rows.length,
+    inProgressTasks,
+    completedTasks,
+    urgentTasks,
   };
 }
 
