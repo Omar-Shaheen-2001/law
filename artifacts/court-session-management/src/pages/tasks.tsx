@@ -20,6 +20,7 @@ import {
   Timer,
   Loader2,
   RefreshCw,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +71,24 @@ interface Task {
 const STORAGE_KEY = 'legal_tasks_v1';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function buildWhatsAppUrl(task: Task): string {
+  const days = getRemainingDays(task.dueDate);
+  const dueDateFormatted = formatDate(task.dueDate);
+  const urgency = days < 0 ? `⚠️ متأخرة ${Math.abs(days)} يوم!` : days === 0 ? '⏰ اليوم آخر موعد!' : days <= 3 ? `⚡ تبقى ${days} أيام فقط!` : `📅 تبقى ${days} يوم`;
+  const msg = [
+    `🔔 *تذكير مهمة قانونية*`,
+    ``,
+    `📌 *المهمة:* ${task.title}`,
+    `👤 *المكلف:* ${task.assignee || 'غير محدد'}`,
+    `📋 *الحالة:* ${task.status}`,
+    `🚩 *الأولوية:* ${task.priority}`,
+    `📆 *تاريخ التسليم:* ${dueDateFormatted || 'غير محدد'}`,
+    `${urgency}`,
+    task.notes ? `\n📝 *ملاحظات:* ${task.notes}` : '',
+  ].filter(Boolean).join('\n');
+  return `https://wa.me/?text=${encodeURIComponent(msg)}`;
+}
+
 function getRemainingDays(dueDate: string): number {
   const due = new Date(dueDate);
   due.setHours(23, 59, 59, 999);
@@ -149,9 +168,17 @@ function RemainingBadge({ dueDate, status }: { dueDate: string; status: TaskStat
 }
 
 // ─── TaskCard ─────────────────────────────────────────────────────────────────
-interface TaskCardProps { task: Task; onEdit: (t: Task) => void; onDelete: (t: Task) => void; onView: (t: Task) => void; onReminder: (t: Task) => void; }
+interface TaskCardProps {
+  task: Task;
+  onEdit: (t: Task) => void;
+  onDelete: (t: Task) => void;
+  onView: (t: Task) => void;
+  onReminder: (t: Task) => void;
+  onSendWhatsapp: (t: Task) => void;
+  isSendingWhatsapp?: boolean;
+}
 
-function TaskCard({ task, onEdit, onDelete, onView, onReminder }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onView, onReminder, onSendWhatsapp, isSendingWhatsapp }: TaskCardProps) {
   const s = statusConfig[task.status];
   const p = priorityConfig[task.priority];
   const SIcon = s.icon;
@@ -170,6 +197,16 @@ function TaskCard({ task, onEdit, onDelete, onView, onReminder }: TaskCardProps)
                 <Bell className="w-3.5 h-3.5" />
               </button>
             )}
+            {/* WhatsApp Direct Gateway Reminder Button */}
+            <button
+              title="إرسال تذكير عبر الواتساب"
+              disabled={isSendingWhatsapp}
+              onClick={(e) => { e.stopPropagation(); onSendWhatsapp(task); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50"
+              style={{ color: '#25D366' }}
+            >
+              {isSendingWhatsapp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
+            </button>
             <button title="تعديل" onClick={() => onEdit(task)} className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--muted-foreground)' }}>
               <Edit3 className="w-3.5 h-3.5" />
             </button>
@@ -291,9 +328,17 @@ function TaskFormDialog({ open, onClose, onSave, initial, isSaving }: TaskFormDi
 }
 
 // ─── TaskDetailDialog ─────────────────────────────────────────────────────────
-interface TaskDetailDialogProps { task: Task | null; onClose: () => void; onEdit: (t: Task) => void; onDelete: (t: Task) => void; onReminder: (t: Task) => void; }
+interface TaskDetailDialogProps {
+  task: Task | null;
+  onClose: () => void;
+  onEdit: (t: Task) => void;
+  onDelete: (t: Task) => void;
+  onReminder: (t: Task) => void;
+  onSendWhatsapp: (t: Task) => void;
+  isSendingWhatsapp?: boolean;
+}
 
-function TaskDetailDialog({ task, onClose, onEdit, onDelete, onReminder }: TaskDetailDialogProps) {
+function TaskDetailDialog({ task, onClose, onEdit, onDelete, onReminder, onSendWhatsapp, isSendingWhatsapp }: TaskDetailDialogProps) {
   if (!task) return null;
   const s = statusConfig[task.status];
   const p = priorityConfig[task.priority];
@@ -348,6 +393,16 @@ function TaskDetailDialog({ task, onClose, onEdit, onDelete, onReminder }: TaskD
         <DialogFooter className="gap-2 flex-row-reverse sm:flex-row-reverse">
           <Button size="sm" onClick={() => { onClose(); onEdit(task); }}><Edit3 className="w-3.5 h-3.5 ml-1" />تعديل</Button>
           <Button size="sm" variant="destructive" onClick={() => { onClose(); onDelete(task); }}><Trash2 className="w-3.5 h-3.5 ml-1" />حذف</Button>
+          <Button
+            size="sm"
+            onClick={() => onSendWhatsapp(task)}
+            disabled={isSendingWhatsapp}
+            className="inline-flex items-center gap-1.5 shrink-0 border-0"
+            style={{ background: 'linear-gradient(135deg,#25D366,#128C7E)', color: '#fff', boxShadow: '0 2px 8px rgba(37,211,102,0.35)' }}
+          >
+            {isSendingWhatsapp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
+            تذكير واتساب
+          </Button>
           <Button size="sm" variant="outline" onClick={onClose} className="mr-auto">إغلاق</Button>
         </DialogFooter>
       </DialogContent>
@@ -361,6 +416,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [sendingWhatsappId, setSendingWhatsappId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | TaskStatus>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | Priority>('all');
@@ -499,6 +555,41 @@ export default function TasksPage() {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, reminderSent: true } : t));
   };
 
+  const handleSendWhatsappReminder = async (task: Task) => {
+    setSendingWhatsappId(task.id);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/send-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`تعذر التواصل مع السيرفر (${res.status}): ${text.slice(0, 100)}`);
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'فشل إرسال تذكير الواتساب');
+      }
+
+      toast({
+        title: 'تم الإرسال بنجاح 🟢',
+        description: data.message || 'تم إرسال تذكير المهمة عبر الواتساب بنجاح.',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'خطأ في إرسال التذكير',
+        description: err?.message || 'تعذر إرسال تذكير الواتساب.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingWhatsappId(null);
+    }
+  };
+
   const filtered = tasks.filter(t => {
     if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !t.assignee.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
@@ -510,7 +601,15 @@ export default function TasksPage() {
   const upcomingTasks = filtered.filter(t => classifyTask(t) === 'upcoming');
   const pastTasks = filtered.filter(t => classifyTask(t) === 'past');
 
-  const cp = (task: Task) => ({ task, onEdit: handleEdit, onDelete: handleDelete, onView: setViewTask, onReminder: handleReminder });
+  const cp = (task: Task) => ({
+    task,
+    onEdit: handleEdit,
+    onDelete: handleDelete,
+    onView: setViewTask,
+    onReminder: handleReminder,
+    onSendWhatsapp: handleSendWhatsappReminder,
+    isSendingWhatsapp: sendingWhatsappId === task.id,
+  });
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto" dir="rtl">
@@ -620,7 +719,15 @@ export default function TasksPage() {
 
       {/* Dialogs */}
       <TaskFormDialog open={formOpen} onClose={() => { setFormOpen(false); setEditingTask(null); }} onSave={handleSave} initial={editingTask} isSaving={isSaving} />
-      <TaskDetailDialog task={viewTask} onClose={() => setViewTask(null)} onEdit={handleEdit} onDelete={handleDelete} onReminder={handleReminder} />
+      <TaskDetailDialog
+        task={viewTask}
+        onClose={() => setViewTask(null)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onReminder={handleReminder}
+        onSendWhatsapp={handleSendWhatsappReminder}
+        isSendingWhatsapp={viewTask ? sendingWhatsappId === viewTask.id : false}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl">

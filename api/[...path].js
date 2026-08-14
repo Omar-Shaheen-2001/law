@@ -57376,13 +57376,12 @@ function buildWhatsappPayloadAndHeaders(url, phone, token, message, instanceId) 
 }
 var WhatsappReminderChannel = class {
   name = "whatsapp";
-  async send(payload) {
+  async sendRaw(message) {
     const settings = getSettings();
     const phone = settings.whatsappNumber?.trim();
     if (!phone) {
       throw new Error("\u0644\u0645 \u064A\u062A\u0645 \u0625\u062F\u062E\u0627\u0644 \u0631\u0642\u0645 \u0627\u0644\u0648\u0627\u062A\u0633\u0627\u0628 \u0641\u064A \u0635\u0641\u062D\u0629 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A.");
     }
-    const message = formatWhatsappMessage(payload);
     if (settings.whatsappApiUrl) {
       const requestConfig = buildWhatsappPayloadAndHeaders(
         settings.whatsappApiUrl.trim(),
@@ -57429,7 +57428,7 @@ var WhatsappReminderChannel = class {
             }
           }
           logger.info(
-            { phone, sessionId: payload.sessionId },
+            { phone },
             "WhatsApp reminder sent via Gateway API successfully"
           );
         }
@@ -57441,13 +57440,15 @@ var WhatsappReminderChannel = class {
       logger.info(
         {
           phone,
-          kind: payload.kind,
-          caseNumber: payload.caseNumber,
           message
         },
         "[WhatsApp Reminder Triggered] Notification formatted for target number from Settings"
       );
     }
+  }
+  async send(payload) {
+    const message = formatWhatsappMessage(payload);
+    return this.sendRaw(message);
   }
 };
 
@@ -58430,6 +58431,43 @@ router11.delete("/tasks/:id", attachAuthUser, requireAuth, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to delete Task record");
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0645\u0647\u0645\u0629." });
+  }
+});
+router11.post("/tasks/:id/send-whatsapp", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D." });
+    return;
+  }
+  try {
+    await ensureTaskSheetReady();
+    const { headers, rows } = await listTaskRowsWithHeaders();
+    const existing = rows.find((r) => r.id === id);
+    if (!existing) {
+      res.status(404).json({ error: "\u0627\u0644\u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629." });
+      return;
+    }
+    const task = rowToRecord3(id, existing.values, headers);
+    const remainingText = calcRemainingDays(task.dueDate);
+    const lines = [
+      `\u{1F514} *\u062A\u0630\u0643\u064A\u0631 \u0628\u0645\u0648\u0639\u062F \u0645\u0647\u0645\u0629 \u0642\u0627\u0646\u0648\u0646\u064A\u0629* (${remainingText ? remainingText : "\u062A\u0630\u0643\u064A\u0631 \u0641\u0648\u0631\u064A"})`,
+      "",
+      `\u{1F4CC} *\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629:* ${task.title}`
+    ];
+    if (task.assignee) lines.push(`\u{1F464} *\u0627\u0644\u0645\u0643\u0644\u0641:* ${task.assignee}`);
+    if (task.status) lines.push(`\u{1F4CB} *\u0627\u0644\u062D\u0627\u0644\u0629:* ${task.status}`);
+    if (task.priority) lines.push(`\u{1F6A9} *\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629:* ${task.priority}`);
+    if (task.dueDate) lines.push(`\u{1F4C5} *\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0633\u0644\u064A\u0645:* ${task.dueDate}`);
+    if (task.notes) lines.push(`\u{1F4DD} *\u0645\u0644\u0627\u062D\u0638\u0627\u062A:* ${task.notes}`);
+    lines.push("", "\u0627\u0644\u0631\u062C\u0627\u0621 \u0627\u0644\u0625\u0646\u062C\u0627\u0632 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u062F\u062F.");
+    const message = lines.join("\n");
+    const channel = new WhatsappReminderChannel();
+    await channel.sendRaw(message);
+    res.json({ message: "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u062A\u0630\u0643\u064A\u0631 \u0627\u0644\u0645\u0647\u0645\u0629 \u0639\u0628\u0631 \u0627\u0644\u0648\u0627\u062A\u0633\u0627\u0628 \u0628\u0646\u062C\u0627\u062D!" });
+  } catch (err) {
+    logger.error({ err, id }, "Failed to send instant WhatsApp task reminder");
+    const errMsg = err?.message || "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u062A\u0630\u0643\u064A\u0631 \u0627\u0644\u0648\u0627\u062A\u0633\u0627\u0628 \u0644\u0644\u0645\u0647\u0645\u0629.";
+    res.status(400).json({ error: errMsg });
   }
 });
 var tasks_default = router11;

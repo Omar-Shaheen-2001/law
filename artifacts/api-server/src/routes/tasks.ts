@@ -9,6 +9,7 @@ import {
   deleteTaskRow,
   TASK_SHEET_COLUMNS,
 } from "../services/task.sheets.service";
+import { WhatsappReminderChannel } from "../services/reminder/channels/whatsappChannel";
 
 const router: IRouter = Router();
 
@@ -194,6 +195,54 @@ router.delete("/tasks/:id", attachAuthUser, requireAuth, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to delete Task record");
     res.status(500).json({ error: "فشل حذف المهمة." });
+  }
+});
+
+/**
+ * POST /api/tasks/:id/send-whatsapp
+ * Dispatches an instant WhatsApp reminder with task details.
+ */
+router.post("/tasks/:id/send-whatsapp", attachAuthUser, requireAuth, async (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "معرف المهمة غير صالح." });
+    return;
+  }
+  try {
+    await ensureTaskSheetReady();
+    const { headers, rows } = await listTaskRowsWithHeaders();
+    const existing = rows.find((r) => r.id === id);
+    if (!existing) {
+      res.status(404).json({ error: "المهمة غير موجودة." });
+      return;
+    }
+    const task = rowToRecord(id, existing.values, headers);
+
+    const remainingText = calcRemainingDays(task.dueDate);
+    const lines: string[] = [
+      `🔔 *تذكير بموعد مهمة قانونية* (${remainingText ? remainingText : "تذكير فوري"})`,
+      "",
+      `📌 *عنوان المهمة:* ${task.title}`,
+    ];
+
+    if (task.assignee) lines.push(`👤 *المكلف:* ${task.assignee}`);
+    if (task.status) lines.push(`📋 *الحالة:* ${task.status}`);
+    if (task.priority) lines.push(`🚩 *الأولوية:* ${task.priority}`);
+    if (task.dueDate) lines.push(`📅 *تاريخ التسليم:* ${task.dueDate}`);
+    if (task.notes) lines.push(`📝 *ملاحظات:* ${task.notes}`);
+
+    lines.push("", "الرجاء الإنجاز والمتابعة في الموعد المحدد.");
+
+    const message = lines.join("\n");
+
+    const channel = new WhatsappReminderChannel();
+    await channel.sendRaw(message);
+
+    res.json({ message: "تم إرسال تذكير المهمة عبر الواتساب بنجاح!" });
+  } catch (err: any) {
+    logger.error({ err, id }, "Failed to send instant WhatsApp task reminder");
+    const errMsg = err?.message || "فشل إرسال تذكير الواتساب للمهمة.";
+    res.status(400).json({ error: errMsg });
   }
 });
 

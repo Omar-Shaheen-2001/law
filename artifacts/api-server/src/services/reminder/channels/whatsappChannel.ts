@@ -146,15 +146,13 @@ function buildWhatsappPayloadAndHeaders(
 export class WhatsappReminderChannel implements ReminderChannel {
   readonly name = "whatsapp";
 
-  async send(payload: ReminderPayload): Promise<void> {
+  async sendRaw(message: string): Promise<void> {
     const settings = getSettings();
     const phone = settings.whatsappNumber?.trim();
 
     if (!phone) {
       throw new Error("لم يتم إدخال رقم الواتساب في صفحة الإعدادات.");
     }
-
-    const message = formatWhatsappMessage(payload);
 
     if (settings.whatsappApiUrl) {
       const requestConfig = buildWhatsappPayloadAndHeaders(
@@ -205,7 +203,7 @@ export class WhatsappReminderChannel implements ReminderChannel {
           }
 
           logger.info(
-            { phone, sessionId: payload.sessionId },
+            { phone },
             "WhatsApp reminder sent via Gateway API successfully",
           );
         }
@@ -217,12 +215,15 @@ export class WhatsappReminderChannel implements ReminderChannel {
       logger.info(
         {
           phone,
-          kind: payload.kind,
-          caseNumber: payload.caseNumber,
           message,
         },
         "[WhatsApp Reminder Triggered] Notification formatted for target number from Settings",
       );
     }
+  }
+
+  async send(payload: ReminderPayload): Promise<void> {
+    const message = formatWhatsappMessage(payload);
+    return this.sendRaw(message);
   }
 }
