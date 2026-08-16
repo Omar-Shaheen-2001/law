@@ -55034,6 +55034,12 @@ function requireEnv(key, hint) {
 }
 var env = {
   // --- Auth (simple env-based credentials, no user database in v1) ---
+  get adminUsername() {
+    return readEnv("ADMIN_USERNAME") ?? "407171248";
+  },
+  get adminPassword() {
+    return readEnv("ADMIN_PASSWORD") ?? "407171248";
+  },
   get appUsername() {
     return readEnv("APP_USERNAME") ?? "5128";
   },
@@ -63180,8 +63186,8 @@ async function ensureDefaultAdmin() {
       return;
     }
     if (count === 0) {
-      const defaultUsername = env.appUsername || "admin";
-      const defaultPassword = env.appPassword || "admin123";
+      const defaultUsername = env.adminUsername || "407171248";
+      const defaultPassword = env.adminPassword || "407171248";
       const password_hash = await import_bcryptjs.default.hash(defaultPassword, 10);
       const { error: insertErr } = await client.from(tableName).insert([
         {
@@ -63189,7 +63195,7 @@ async function ensureDefaultAdmin() {
           email: `${defaultUsername}@law.local`,
           password_hash,
           role: "admin",
-          display_name: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A"
+          display_name: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 (\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645)"
         }
       ]);
       if (insertErr) {
@@ -63247,11 +63253,11 @@ async function listSupabaseUsers() {
   if (!client) {
     return [
       {
-        id: "local-default",
-        username: env.appUsername || "5128",
-        email: "local@law.internal",
+        id: "local-admin",
+        username: env.adminUsername || "407171248",
+        email: "admin@law.internal",
         role: "admin",
-        display_name: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0645\u062D\u0644\u064A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A",
+        display_name: "\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A",
         created_at: (/* @__PURE__ */ new Date()).toISOString()
       }
     ];
@@ -63431,16 +63437,16 @@ router2.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, 
       logger.error({ err }, "Error authenticating admin with Supabase");
     }
   }
-  if (username === env.appUsername && password === env.appPassword) {
+  if (username === env.adminUsername && password === env.adminPassword) {
     setSessionCookie(res, {
       username,
       role: "admin",
-      displayName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A"
+      displayName: "\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645"
     });
     res.json({
       username,
       role: "admin",
-      displayName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A"
+      displayName: "\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645"
     });
     return;
   }

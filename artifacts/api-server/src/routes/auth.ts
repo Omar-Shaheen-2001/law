@@ -119,18 +119,18 @@ router.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, r
     }
   }
 
-  // 2. Fallback to env default credentials
-  if (username === env.appUsername && password === env.appPassword) {
+  // 2. Fallback to dedicated admin env credentials
+  if (username === env.adminUsername && password === env.adminPassword) {
     setSessionCookie(res, {
       username,
       role: "admin",
-      displayName: "المدير الافتراضي",
+      displayName: "المشرف العام",
     });
 
     res.json({
       username,
       role: "admin",
-      displayName: "المدير الافتراضي",
+      displayName: "المشرف العام",
     });
     return;
   }

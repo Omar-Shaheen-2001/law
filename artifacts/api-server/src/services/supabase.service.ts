@@ -67,8 +67,8 @@ export async function ensureDefaultAdmin(): Promise<void> {
     }
 
     if (count === 0) {
-      const defaultUsername = env.appUsername || "admin";
-      const defaultPassword = env.appPassword || "admin123";
+      const defaultUsername = env.adminUsername || "407171248";
+      const defaultPassword = env.adminPassword || "407171248";
       const password_hash = await bcrypt.hash(defaultPassword, 10);
 
       const { error: insertErr } = await client.from(tableName).insert([
@@ -77,7 +77,7 @@ export async function ensureDefaultAdmin(): Promise<void> {
           email: `${defaultUsername}@law.local`,
           password_hash,
           role: "admin",
-          display_name: "مدير النظام الافتراضي",
+          display_name: "مدير النظام (المشرف العام)",
         },
       ]);
 
@@ -158,14 +158,14 @@ export async function verifySupabaseUser(
 export async function listSupabaseUsers(): Promise<AppUser[]> {
   const client = getSupabaseClient();
   if (!client) {
-    // If Supabase is not configured, return default local user
+    // If Supabase is not configured, return default local admin user
     return [
       {
-        id: "local-default",
-        username: env.appUsername || "5128",
-        email: "local@law.internal",
+        id: "local-admin",
+        username: env.adminUsername || "407171248",
+        email: "admin@law.internal",
         role: "admin",
-        display_name: "المستخدم المحلي الافتراضي",
+        display_name: "المشرف العام الافتراضي",
         created_at: new Date().toISOString(),
       },
     ];

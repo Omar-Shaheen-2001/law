@@ -40,6 +40,12 @@ function requireEnv(key: string, hint?: string): string {
 
 export const env = {
   // --- Auth (simple env-based credentials, no user database in v1) ---
+  get adminUsername(): string {
+    return readEnv("ADMIN_USERNAME") ?? "407171248";
+  },
+  get adminPassword(): string {
+    return readEnv("ADMIN_PASSWORD") ?? "407171248";
+  },
   get appUsername(): string {
     return readEnv("APP_USERNAME") ?? "5128";
   },
