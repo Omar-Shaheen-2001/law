@@ -14,7 +14,6 @@ const navigation = [
   { name: 'الوكالات', path: '/poa', icon: ShieldCheck },
   { name: 'الأحكام', path: '/judgments', icon: Gavel },
   { name: 'المهام', path: '/tasks', icon: CheckSquare },
-  { name: 'إدارة المستخدمين', path: '/users', icon: Users },
   { name: 'الإعدادات', path: '/settings', icon: Settings },
 ];
 

@@ -6,6 +6,7 @@ import {
   attachAuthUser,
   clearSessionCookie,
   requireAuth,
+  requireAdmin,
   setSessionCookie,
 } from "../middlewares/auth.middleware";
 import { loginRateLimiter } from "../middlewares/rate-limiter.middleware";
@@ -73,6 +74,70 @@ router.post("/auth/login", loginRateLimiter, attachAuthUser, async (req, res) =>
   res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة." });
 });
 
+/**
+ * Dedicated Admin Portal Login
+ * Only users with role === 'admin' are permitted
+ */
+router.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, res) => {
+  const parseResult = LoginBody.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان." });
+    return;
+  }
+
+  const { username, password } = parseResult.data;
+
+  // 1. If Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      await ensureDefaultAdmin();
+      const supabaseUser = await verifySupabaseUser(username, password);
+      if (supabaseUser) {
+        if (supabaseUser.role !== "admin") {
+          res.status(403).json({
+            error: "عذراً، هذا الحساب ليس لديه صلاحيات الإدارة للدخول لبوابة المشرف.",
+          });
+          return;
+        }
+
+        setSessionCookie(res, {
+          username: supabaseUser.username,
+          userId: supabaseUser.id,
+          role: supabaseUser.role,
+          displayName: supabaseUser.display_name || supabaseUser.username,
+        });
+
+        res.json({
+          username: supabaseUser.username,
+          role: supabaseUser.role,
+          displayName: supabaseUser.display_name,
+        });
+        return;
+      }
+    } catch (err) {
+      logger.error({ err }, "Error authenticating admin with Supabase");
+    }
+  }
+
+  // 2. Fallback to env default credentials
+  if (username === env.appUsername && password === env.appPassword) {
+    setSessionCookie(res, {
+      username,
+      role: "admin",
+      displayName: "المدير الافتراضي",
+    });
+
+    res.json({
+      username,
+      role: "admin",
+      displayName: "المدير الافتراضي",
+    });
+    return;
+  }
+
+  res.status(401).json({ error: "بيانات دخول المشرف غير صحيحة." });
+});
+
 router.post("/auth/logout", (_req, res) => {
   clearSessionCookie(res);
   res.status(204).send();
@@ -94,4 +159,4 @@ router.get("/auth/me", attachAuthUser, requireAuth, (req, res) => {
 });
 
 export default router;
-export { attachAuthUser, requireAuth };
+export { attachAuthUser, requireAuth, requireAdmin };

@@ -55238,6 +55238,17 @@ function requireAuth(req, res, next) {
   }
   next();
 }
+function requireAdmin(req, res, next) {
+  if (!req.authUser) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (req.authUser.role !== "admin") {
+    res.status(403).json({ error: "\u0647\u0630\u0627 \u0627\u0644\u0625\u062C\u0631\u0627\u0621 \u064A\u062A\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 (Admin)." });
+    return;
+  }
+  next();
+}
 
 // src/middlewares/rate-limiter.middleware.ts
 var ipMap = /* @__PURE__ */ new Map();
@@ -63384,6 +63395,56 @@ router2.post("/auth/login", loginRateLimiter, attachAuthUser, async (req, res) =
     return;
   }
   res.status(401).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0623\u0648 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629." });
+});
+router2.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, res) => {
+  const parseResult = LoginBody.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0637\u0644\u0648\u0628\u0627\u0646." });
+    return;
+  }
+  const { username, password } = parseResult.data;
+  if (isSupabaseConfigured()) {
+    try {
+      await ensureDefaultAdmin();
+      const supabaseUser = await verifySupabaseUser(username, password);
+      if (supabaseUser) {
+        if (supabaseUser.role !== "admin") {
+          res.status(403).json({
+            error: "\u0639\u0630\u0631\u0627\u064B\u060C \u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628 \u0644\u064A\u0633 \u0644\u062F\u064A\u0647 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0625\u062F\u0627\u0631\u0629 \u0644\u0644\u062F\u062E\u0648\u0644 \u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u0634\u0631\u0641."
+          });
+          return;
+        }
+        setSessionCookie(res, {
+          username: supabaseUser.username,
+          userId: supabaseUser.id,
+          role: supabaseUser.role,
+          displayName: supabaseUser.display_name || supabaseUser.username
+        });
+        res.json({
+          username: supabaseUser.username,
+          role: supabaseUser.role,
+          displayName: supabaseUser.display_name
+        });
+        return;
+      }
+    } catch (err) {
+      logger.error({ err }, "Error authenticating admin with Supabase");
+    }
+  }
+  if (username === env.appUsername && password === env.appPassword) {
+    setSessionCookie(res, {
+      username,
+      role: "admin",
+      displayName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A"
+    });
+    res.json({
+      username,
+      role: "admin",
+      displayName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A"
+    });
+    return;
+  }
+  res.status(401).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u062F\u062E\u0648\u0644 \u0627\u0644\u0645\u0634\u0631\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629." });
 });
 router2.post("/auth/logout", (_req, res) => {
   clearSessionCookie(res);
@@ -82122,7 +82183,7 @@ router12.get("/users", async (_req, res) => {
     });
   }
 });
-router12.post("/users", async (req, res) => {
+router12.post("/users", requireAdmin, async (req, res) => {
   try {
     const { username, email, password, role, display_name } = req.body;
     if (!username || !password) {
@@ -82142,9 +82203,9 @@ router12.post("/users", async (req, res) => {
     res.status(400).json({ error: err.message || "\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645." });
   }
 });
-router12.patch("/users/:id", async (req, res) => {
+router12.patch("/users/:id", requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { password, role, display_name, email } = req.body;
     const updatedUser = await updateSupabaseUser(id, {
       password,
@@ -82158,9 +82219,9 @@ router12.patch("/users/:id", async (req, res) => {
     res.status(400).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645." });
   }
 });
-router12.delete("/users/:id", async (req, res) => {
+router12.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     if (req.authUser?.userId === id) {
       res.status(400).json({ error: "\u0644\u0627 \u064A\u0645\u0643\u0646\u0643 \u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0630\u064A \u0642\u0645\u062A \u0628\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0647 \u062D\u0627\u0644\u064A\u0627\u064B." });
       return;

@@ -4,15 +4,18 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthGuard } from '@/components/auth-guard';
+import { AdminGuard } from '@/components/admin-guard';
 import { Sidebar } from '@/components/sidebar';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Redirect, Router as WouterRouter } from 'wouter';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Scale } from 'lucide-react';
 import { GlobalSearch } from '@/components/global-search';
 
 const NotFound = React.lazy(() => import('@/pages/not-found'));
 const LoginPage = React.lazy(() => import('@/pages/login'));
+const AdminLoginPage = React.lazy(() => import('@/pages/admin-login'));
+const AdminDashboardPage = React.lazy(() => import('@/pages/admin-dashboard'));
 const DashboardPage = React.lazy(() => import('@/pages/dashboard'));
 const ChatPage = React.lazy(() => import('@/pages/chat'));
 const SessionsPage = React.lazy(() => import('@/pages/sessions'));
@@ -23,7 +26,6 @@ const SessionReportPage = React.lazy(() => import('@/pages/session-report'));
 const PoaPage = React.lazy(() => import('@/pages/poa'));
 const JudgmentsPage = React.lazy(() => import('@/pages/judgments'));
 const TasksPage = React.lazy(() => import('@/pages/tasks'));
-const UsersPage = React.lazy(() => import('@/pages/users'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,11 +91,35 @@ function AppShell({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <Switch>
+      {/* Staff Login */}
       <Route path="/login">
         <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
           <LoginPage />
         </Suspense>
       </Route>
+
+      {/* Admin Portal Gateway Login */}
+      <Route path="/admin/login">
+        <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+          <AdminLoginPage />
+        </Suspense>
+      </Route>
+
+      {/* Dedicated Admin Portal */}
+      <Route path="/admin">
+        <AdminGuard>
+          <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+            <AdminDashboardPage />
+          </Suspense>
+        </AdminGuard>
+      </Route>
+
+      {/* Redirect /users to /admin */}
+      <Route path="/users">
+        <Redirect to="/admin" />
+      </Route>
+
+      {/* Staff Workspace Pages */}
       <Route path="/">
         <AuthGuard>
           <AppShell>
@@ -161,13 +187,6 @@ function Router() {
         <AuthGuard>
           <AppShell>
             <TasksPage />
-          </AppShell>
-        </AuthGuard>
-      </Route>
-      <Route path="/users">
-        <AuthGuard>
-          <AppShell>
-            <UsersPage />
           </AppShell>
         </AuthGuard>
       </Route>

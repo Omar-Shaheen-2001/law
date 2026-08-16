@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
+import { attachAuthUser, requireAuth, requireAdmin } from "../middlewares/auth.middleware";
 import {
   listSupabaseUsers,
   createSupabaseUser,
@@ -38,9 +38,9 @@ router.get("/users", async (_req, res) => {
 
 /**
  * POST /api/users
- * Creates a new user
+ * Creates a new user (Admin only)
  */
-router.post("/users", async (req, res) => {
+router.post("/users", requireAdmin, async (req, res) => {
   try {
     const { username, email, password, role, display_name } = req.body;
 
@@ -66,11 +66,11 @@ router.post("/users", async (req, res) => {
 
 /**
  * PATCH /api/users/:id
- * Updates an existing user
+ * Updates an existing user (Admin only)
  */
-router.patch("/users/:id", async (req, res) => {
+router.patch("/users/:id", requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { password, role, display_name, email } = req.body;
 
     const updatedUser = await updateSupabaseUser(id, {
@@ -89,11 +89,11 @@ router.patch("/users/:id", async (req, res) => {
 
 /**
  * DELETE /api/users/:id
- * Deletes a user
+ * Deletes a user (Admin only)
  */
-router.delete("/users/:id", async (req, res) => {
+router.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     if (req.authUser?.userId === id) {
       res.status(400).json({ error: "لا يمكنك حذف الحساب الذي قمت بتسجيل الدخول به حالياً." });
       return;

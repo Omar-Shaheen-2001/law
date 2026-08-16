@@ -96,3 +96,20 @@ export function requireAuth(
   }
   next();
 }
+
+/** Rejects the request with 403 unless the authenticated user has the 'admin' role. */
+export function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.authUser) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (req.authUser.role !== "admin") {
+    res.status(403).json({ error: "هذا الإجراء يتطلب صلاحيات المشرف العام (Admin)." });
+    return;
+  }
+  next();
+}
