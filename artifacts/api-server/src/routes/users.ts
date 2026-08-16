@@ -42,7 +42,16 @@ router.get("/users", async (_req, res) => {
  */
 router.post("/users", requireAdmin, async (req, res) => {
   try {
-    const { username, email, password, role, display_name } = req.body;
+    const {
+      username,
+      email,
+      password,
+      role,
+      display_name,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name,
+    } = req.body;
 
     if (!username || !password) {
       res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان." });
@@ -55,6 +64,9 @@ router.post("/users", requireAdmin, async (req, res) => {
       password,
       role: role === "admin" ? "admin" : "staff",
       display_name,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name,
     });
 
     res.status(201).json(newUser);
@@ -71,13 +83,24 @@ router.post("/users", requireAdmin, async (req, res) => {
 router.patch("/users/:id", requireAdmin, async (req, res) => {
   try {
     const id = String(req.params.id);
-    const { password, role, display_name, email } = req.body;
+    const {
+      password,
+      role,
+      display_name,
+      email,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name,
+    } = req.body;
 
     const updatedUser = await updateSupabaseUser(id, {
       password,
       role,
       display_name,
       email,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name,
     });
 
     res.json(updatedUser);

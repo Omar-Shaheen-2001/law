@@ -7,7 +7,7 @@ import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/stats", attachAuthUser, requireAuth, async (_req, res) => {
+router.get("/dashboard/stats", attachAuthUser, requireAuth, async (req, res) => {
   if (!isGoogleSheetsConfigured()) {
     res.status(500).json({
       error:
@@ -16,7 +16,8 @@ router.get("/dashboard/stats", attachAuthUser, requireAuth, async (_req, res) =>
     return;
   }
   try {
-    const stats = await getDashboardStats();
+    const userId = req.authUser?.userId;
+    const stats = await getDashboardStats(userId);
     const data = GetDashboardStatsResponse.parse(stats);
     res.json(data);
   } catch (err: any) {

@@ -5,7 +5,6 @@ import {
   UserPlus,
   Trash2,
   Key,
-  Shield,
   RefreshCw,
   Search,
   CheckCircle2,
@@ -19,18 +18,18 @@ import {
   Edit2,
   LogOut,
   ExternalLink,
-  Settings,
   Save,
   Eye,
   EyeOff,
-  Server,
-  Activity,
-  Layers,
+  Sheet,
+  FileCode,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useLocation } from 'wouter';
 import { useGetCurrentUser, useLogout } from '@workspace/api-client-react';
@@ -42,6 +41,10 @@ export interface AppUser {
   email?: string | null;
   role: 'admin' | 'staff';
   display_name?: string | null;
+  google_service_account_json?: string | null;
+  google_spreadsheet_id?: string | null;
+  google_sheet_name?: string | null;
+  has_google_service?: boolean;
   created_at?: string;
 }
 
@@ -59,12 +62,20 @@ create table if not exists public.app_users (
   password_hash text not null,
   role text default 'staff', -- 'admin' | 'staff'
   display_name text,
+  google_service_account_json text, -- ملف مفتاح Google Service Account JSON الخاص بالمستخدم
+  google_spreadsheet_id text,       -- معرف جدول Google Sheets الخاص بالمستخدم
+  google_sheet_name text default 'Sessions',
   created_at timestamp with time zone default now()
 );
 
 -- تفعيل فهرس سريع للبحث
 create index if not exists idx_app_users_username on public.app_users (username);
-create index if not exists idx_app_users_email on public.app_users (email);`;
+create index if not exists idx_app_users_email on public.app_users (email);
+
+-- إذا كان الجدول موجوداً مسبقاً في مشروعك، نفّذ هذه الأوامر لإضافة الأعمدة الجديدة:
+alter table public.app_users add column if not exists google_service_account_json text;
+alter table public.app_users add column if not exists google_spreadsheet_id text;
+alter table public.app_users add column if not exists google_sheet_name text default 'Sessions';`;
 
 export default function AdminDashboardPage() {
   const [, navigate] = useLocation();
@@ -96,12 +107,20 @@ export default function AdminDashboardPage() {
     email: '',
     password: '',
     role: 'staff' as 'admin' | 'staff',
+    google_service_account_json: '',
+    google_spreadsheet_id: '',
+    google_sheet_name: '',
   });
+
   const [newPassword, setNewPassword] = useState('');
+
   const [editUserData, setEditUserData] = useState({
     display_name: '',
     email: '',
     role: 'staff' as 'admin' | 'staff',
+    google_service_account_json: '',
+    google_spreadsheet_id: '',
+    google_sheet_name: '',
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -172,7 +191,7 @@ export default function AdminDashboardPage() {
   const handleCopySql = () => {
     navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
     setCopiedSql(true);
-    toast({ title: 'تم النسخ ✅', description: 'تم نسخ سكربت SQL لإنشاء الجدول في Supabase.' });
+    toast({ title: 'تم النسخ ✅', description: 'تم نسخ سكربت SQL لإنشاء وتحديث الجدول في Supabase.' });
     setTimeout(() => setCopiedSql(false), 3000);
   };
 
@@ -231,6 +250,28 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    // Optional JSON validation on client
+    if (newUser.google_service_account_json.trim()) {
+      try {
+        const parsed = JSON.parse(newUser.google_service_account_json.trim());
+        if (!parsed.client_email || !parsed.private_key) {
+          toast({
+            title: 'خطأ في ملف Google JSON',
+            description: 'الملف يجب أن يحتوي على client_email و private_key.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } catch {
+        toast({
+          title: 'صيغة JSON غير صحيحة',
+          description: 'تأكد من نسخ كود Google Service Account JSON بشكل سليم.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setActionLoading(true);
     try {
       const res = await fetch('/api/users', {
@@ -245,7 +286,7 @@ export default function AdminDashboardPage() {
         throw new Error(data.error || 'فشل إنشاء المستخدم');
       }
 
-      toast({ title: 'نجاح ✅', description: `تمت إضافة المستخدم (${data.username}) بنجاح.` });
+      toast({ title: 'نجاح ✅', description: `تمت إضافة المستخدم (${data.username}) وتخصيص بياناته بنجاح.` });
       setIsAddOpen(false);
       setNewUser({
         username: '',
@@ -253,6 +294,9 @@ export default function AdminDashboardPage() {
         email: '',
         password: '',
         role: 'staff',
+        google_service_account_json: '',
+        google_spreadsheet_id: '',
+        google_sheet_name: '',
       });
       fetchUsers();
     } catch (err: any) {
@@ -295,6 +339,28 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!selectedUser) return;
 
+    // Optional JSON validation on client
+    if (editUserData.google_service_account_json.trim()) {
+      try {
+        const parsed = JSON.parse(editUserData.google_service_account_json.trim());
+        if (!parsed.client_email || !parsed.private_key) {
+          toast({
+            title: 'خطأ في ملف Google JSON',
+            description: 'الملف يجب أن يحتوي على client_email و private_key.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } catch {
+        toast({
+          title: 'صيغة JSON غير صحيحة',
+          description: 'تأكد من نسخ كود Google Service Account JSON بشكل سليم.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setActionLoading(true);
     try {
       const res = await fetch(`/api/users/${selectedUser.id}`, {
@@ -309,7 +375,7 @@ export default function AdminDashboardPage() {
         throw new Error(data.error || 'فشل تعديل بيانات المستخدم');
       }
 
-      toast({ title: 'تم الحفظ ✅', description: 'تم تحديث بيانات المستخدم بنجاح.' });
+      toast({ title: 'تم الحفظ ✅', description: 'تم تحديث بيانات المستخدم وتخصيص حسابه بنجاح.' });
       setIsEditModalOpen(false);
       setSelectedUser(null);
       fetchUsers();
@@ -352,12 +418,14 @@ export default function AdminDashboardPage() {
     return (
       u.username.toLowerCase().includes(q) ||
       (u.display_name && u.display_name.toLowerCase().includes(q)) ||
-      (u.email && u.email.toLowerCase().includes(q))
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.google_spreadsheet_id && u.google_spreadsheet_id.toLowerCase().includes(q))
     );
   });
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const staffCount = users.filter((u) => u.role === 'staff').length;
+  const customSheetsCount = users.filter((u) => u.has_google_service).length;
 
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
@@ -434,17 +502,17 @@ export default function AdminDashboardPage() {
             <p className="text-[11px] text-muted-foreground">صلاحيات إدارة كاملة</p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-xs font-semibold">الموظفون (Staff)</span>
-              <User className="w-4 h-4 text-sky-500" />
-            </div>
-            <p className="text-2xl font-extrabold text-foreground">{staffCount}</p>
-            <p className="text-[11px] text-muted-foreground">صلاحية دخول نظام الجلسات فقط</p>
-          </div>
-
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 shadow-xs space-y-2">
             <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
+              <span className="text-xs font-semibold">شيتات مخصصة (Custom)</span>
+              <Sheet className="w-4 h-4" />
+            </div>
+            <p className="text-2xl font-extrabold text-foreground">{customSheetsCount}</p>
+            <p className="text-[11px] text-muted-foreground">مستخدمون بقواعد بيانات مستقلة</p>
+          </div>
+
+          <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-5 shadow-xs space-y-2">
+            <div className="flex items-center justify-between text-sky-600 dark:text-sky-400">
               <span className="text-xs font-semibold">قاعدة Supabase</span>
               <Database className="w-4 h-4" />
             </div>
@@ -459,7 +527,7 @@ export default function AdminDashboardPage() {
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {isSupabaseConfigured ? 'المزامنة السحابية نشطة' : 'يمكنك ربط Supabase أدناه'}
+              {isSupabaseConfigured ? 'المزامنة السحابية نشطة' : 'يمكنك ضبط Supabase أدناه'}
             </p>
           </div>
         </div>
@@ -506,10 +574,10 @@ export default function AdminDashboardPage() {
               <div>
                 <h2 className="text-lg font-bold flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
-                  قائمة المستخدمين المصرح لهم
+                  قائمة المستخدمين والموظفين المصرح لهم
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  إضافة وتعديل وحذف حسابات الموظفين مع إمكانية إعادة تعيين كلمات المرور
+                  إضافة حسابات مخصصة، ربط Google Service Account وشيت مستقل لكل مستخدم، وتعديل الصلاحيات
                 </p>
               </div>
 
@@ -541,7 +609,7 @@ export default function AdminDashboardPage() {
             <div className="relative max-w-md">
               <Search className="w-4 h-4 absolute start-3 inset-y-0 my-auto text-muted-foreground" />
               <Input
-                placeholder="بحث بالاسم أو البريد أو اسم المستخدم..."
+                placeholder="بحث بالاسم أو البريد أو اسم المستخدم أو معرف الشيت..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="ps-9 text-sm h-9"
@@ -558,6 +626,7 @@ export default function AdminDashboardPage() {
                       <th className="py-3 px-4 text-start">الاسم الظاهر</th>
                       <th className="py-3 px-4 text-start">البريد الإلكتروني</th>
                       <th className="py-3 px-4 text-start">الصلاحية</th>
+                      <th className="py-3 px-4 text-start">قاعدة Google Sheets</th>
                       <th className="py-3 px-4 text-start">تاريخ الإنشاء</th>
                       <th className="py-3 px-4 text-end">الإجراءات</th>
                     </tr>
@@ -565,7 +634,7 @@ export default function AdminDashboardPage() {
                   <tbody className="divide-y divide-border">
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
                           <div className="flex flex-col items-center gap-2">
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
                             <span className="text-xs">جارٍ جلب الحسابات...</span>
@@ -574,7 +643,7 @@ export default function AdminDashboardPage() {
                       </tr>
                     ) : filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
                           <div className="flex flex-col items-center gap-2">
                             <Users className="w-8 h-8 opacity-30" />
                             <p className="text-sm font-medium">لا توجد حسابات مطابقة</p>
@@ -619,6 +688,26 @@ export default function AdminDashboardPage() {
                                 </Badge>
                               )}
                             </td>
+                            <td className="py-3 px-4">
+                              {u.has_google_service ? (
+                                <div className="space-y-0.5">
+                                  <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 text-[11px]">
+                                    <Sparkles className="w-3 h-3" />
+                                    <span>شيت مخصص</span>
+                                  </Badge>
+                                  {u.google_spreadsheet_id && (
+                                    <p className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]" title={u.google_spreadsheet_id}>
+                                      ID: {u.google_spreadsheet_id.slice(0, 8)}...
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                  <span>الشيت العام للمنظومة</span>
+                                </span>
+                              )}
+                            </td>
                             <td className="py-3 px-4 text-muted-foreground text-xs">
                               {u.created_at
                                 ? new Date(u.created_at).toLocaleDateString('ar-SA', {
@@ -646,13 +735,16 @@ export default function AdminDashboardPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  title="تعديل المستخدم"
+                                  title="تعديل المستخدم وتخصيص Google Sheets"
                                   onClick={() => {
                                     setSelectedUser(u);
                                     setEditUserData({
                                       display_name: u.display_name || '',
                                       email: u.email || '',
                                       role: u.role,
+                                      google_service_account_json: '',
+                                      google_spreadsheet_id: u.google_spreadsheet_id || '',
+                                      google_sheet_name: u.google_sheet_name || '',
                                     });
                                     setIsEditModalOpen(true);
                                   }}
@@ -702,7 +794,7 @@ export default function AdminDashboardPage() {
                       إعدادات وربط قاعدة بيانات المستخدمين (Supabase)
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                      ربط الحسابات السحابية لحفظ وإدارة مستخدمي وموظفي المنظومة بأمان
+                      ربط الحسابات السحابية لحفظ وإدارة مستخدمي وموظفي المنظومة وتخصيص بياناتهم
                     </p>
                   </div>
                 </div>
@@ -792,7 +884,7 @@ export default function AdminDashboardPage() {
                 {/* SQL Script Box */}
                 <div className="space-y-2 pt-2">
                   <Label className="text-xs font-bold flex items-center justify-between text-muted-foreground">
-                    <span>سكربت إنشاء الجدول في Supabase (SQL Script):</span>
+                    <span>سكربت إنشاء وتحديث الجدول في Supabase (SQL Script):</span>
                     <span className="text-[11px] font-normal text-muted-foreground">
                       انسخ والصق في SQL Editor داخل Supabase
                     </span>
@@ -820,14 +912,14 @@ export default function AdminDashboardPage() {
         )}
       </main>
 
-      {/* Modal: Add User */}
+      {/* Modal: Add User with Google Sheets & Service Account Customization */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 my-8">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-primary" />
-                <span>إضافة مستخدم جديد</span>
+                <span>إضافة مستخدم جديد وتخصيص حسابه</span>
               </h3>
               <button
                 onClick={() => setIsAddOpen(false)}
@@ -837,82 +929,134 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">اسم المستخدم (Username) *</Label>
-                <Input
-                  required
-                  placeholder="e.g. lawyer1 أو 5128"
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  className="font-mono text-sm"
-                  dir="ltr"
-                />
+            <form onSubmit={handleCreateUser} className="space-y-4 max-h-[75vh] overflow-y-auto pe-1">
+              {/* Account Basic Info */}
+              <div className="space-y-3 p-4 rounded-xl border border-border bg-muted/20">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">اسم المستخدم (Username) *</Label>
+                  <Input
+                    required
+                    placeholder="e.g. lawyer1 أو 5128"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    className="font-mono text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">الاسم الظاهر</Label>
+                  <Input
+                    placeholder="e.g. أ. عمر شاهين"
+                    value={newUser.display_name}
+                    onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })}
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">البريد الإلكتروني (اختياري)</Label>
+                  <Input
+                    type="email"
+                    placeholder="lawyer@office.com"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    className="font-mono text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">كلمة المرور *</Label>
+                  <Input
+                    required
+                    type="password"
+                    placeholder="••••••••"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    className="font-mono text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setNewUser({ ...newUser, role: 'staff' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        newUser.role === 'staff'
+                          ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>موظف (Staff)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setNewUser({ ...newUser, role: 'admin' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        newUser.role === 'admin'
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>مشرف (Admin)</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">الاسم الظاهر</Label>
-                <Input
-                  placeholder="e.g. أ. عمر شاهين"
-                  value={newUser.display_name}
-                  onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })}
-                  className="text-sm"
-                />
-              </div>
+              {/* Per-User Google Sheets & Service Account Customization */}
+              <div className="space-y-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                  <Sheet className="w-4 h-4" />
+                  <span>تخصيص Google Sheets و Service Account لهذا المستخدم (اختياري)</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  إذا أردت أن يعمل هذا المستخدم على جدول Google Sheets خاص به وبحساب Google Cloud منفصل تماماً، الصق مفتاح الـ JSON الخاص به ومعرّف جدوله أدناه:
+                </p>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">البريد الإلكتروني (اختياري)</Label>
-                <Input
-                  type="email"
-                  placeholder="lawyer@office.com"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="font-mono text-sm"
-                  dir="ltr"
-                />
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold flex items-center justify-between">
+                    <span>محتوى ملف Google Service Account JSON:</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">client_email + private_key</span>
+                  </Label>
+                  <Textarea
+                    placeholder={`{\n  "type": "service_account",\n  "client_email": "user-account@project.iam.gserviceaccount.com",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n..."\n}`}
+                    value={newUser.google_service_account_json}
+                    onChange={(e) => setNewUser({ ...newUser, google_service_account_json: e.target.value })}
+                    className="font-mono text-xs h-24"
+                    dir="ltr"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">كلمة المرور *</Label>
-                <Input
-                  required
-                  type="password"
-                  placeholder="••••••••"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="font-mono text-sm"
-                  dir="ltr"
-                />
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">معرّف جدول جوجل شيت (Spreadsheet ID) الخاص به</Label>
+                  <Input
+                    placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                    value={newUser.google_spreadsheet_id}
+                    onChange={(e) => setNewUser({ ...newUser, google_spreadsheet_id: e.target.value })}
+                    className="font-mono text-xs"
+                    dir="ltr"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    تأكد من مشاركة الجدول مع الإيميل الموجود في ملف الـ Service Account بصلاحية محرر (Editor).
+                  </p>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setNewUser({ ...newUser, role: 'staff' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      newUser.role === 'staff'
-                        ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>موظف (Staff)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setNewUser({ ...newUser, role: 'admin' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      newUser.role === 'admin'
-                        ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>مشرف (Admin)</span>
-                  </button>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">اسم ورقة العمل (Sheet Name) (اختياري)</Label>
+                  <Input
+                    placeholder="Sessions"
+                    value={newUser.google_sheet_name}
+                    onChange={(e) => setNewUser({ ...newUser, google_sheet_name: e.target.value })}
+                    className="text-xs"
+                  />
                 </div>
               </div>
 
@@ -933,7 +1077,7 @@ export default function AdminDashboardPage() {
                   className="text-xs text-white"
                   style={{ background: 'linear-gradient(135deg, #B88A3B 0%, #966c25 100%)' }}
                 >
-                  {actionLoading ? 'جارٍ الحفظ...' : 'حفظ وإضافة'}
+                  {actionLoading ? 'جارٍ الحفظ...' : 'حفظ وإضافة المستخدم'}
                 </Button>
               </div>
             </form>
@@ -1003,10 +1147,10 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* Modal: Edit User */}
+      {/* Modal: Edit User and Customize Google Sheets */}
       {isEditModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 my-8">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-primary" />
@@ -1023,57 +1167,106 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateUser} className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">الاسم الظاهر</Label>
-                <Input
-                  placeholder="e.g. أ. عمر شاهين"
-                  value={editUserData.display_name}
-                  onChange={(e) => setEditUserData({ ...editUserData, display_name: e.target.value })}
-                  className="text-sm"
-                />
+            <form onSubmit={handleUpdateUser} className="space-y-4 max-h-[75vh] overflow-y-auto pe-1">
+              <div className="space-y-3 p-4 rounded-xl border border-border bg-muted/20">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">الاسم الظاهر</Label>
+                  <Input
+                    placeholder="e.g. أ. عمر شاهين"
+                    value={editUserData.display_name}
+                    onChange={(e) => setEditUserData({ ...editUserData, display_name: e.target.value })}
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">البريد الإلكتروني</Label>
+                  <Input
+                    type="email"
+                    placeholder="lawyer@office.com"
+                    value={editUserData.email}
+                    onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })}
+                    className="font-mono text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditUserData({ ...editUserData, role: 'staff' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        editUserData.role === 'staff'
+                          ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>موظف (Staff)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditUserData({ ...editUserData, role: 'admin' })}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        editUserData.role === 'admin'
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>مشرف (Admin)</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">البريد الإلكتروني</Label>
-                <Input
-                  type="email"
-                  placeholder="lawyer@office.com"
-                  value={editUserData.email}
-                  onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })}
-                  className="font-mono text-sm"
-                  dir="ltr"
-                />
-              </div>
+              {/* Per-User Google Sheets Customization in Edit */}
+              <div className="space-y-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                    <Sheet className="w-4 h-4" />
+                    <span>تخصيص Google Sheets و Service Account</span>
+                  </div>
+                  {selectedUser.has_google_service && (
+                    <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px]">
+                      ✔ تم التعيين مسبقاً
+                    </Badge>
+                  )}
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setEditUserData({ ...editUserData, role: 'staff' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      editUserData.role === 'staff'
-                        ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>موظف (Staff)</span>
-                  </button>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">محتوى ملف Google Service Account JSON الجديد (اختياري)</Label>
+                  <Textarea
+                    placeholder={selectedUser.has_google_service ? "اتركه فارغاً للإبقاء على الملف الحالي، أو الصق مفتاحاً جديداً..." : "الصق كود Google Service Account JSON هنا..."}
+                    value={editUserData.google_service_account_json}
+                    onChange={(e) => setEditUserData({ ...editUserData, google_service_account_json: e.target.value })}
+                    className="font-mono text-xs h-24"
+                    dir="ltr"
+                  />
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setEditUserData({ ...editUserData, role: 'admin' })}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      editUserData.role === 'admin'
-                        ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>مشرف (Admin)</span>
-                  </button>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">معرّف جدول جوجل شيت (Spreadsheet ID)</Label>
+                  <Input
+                    placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                    value={editUserData.google_spreadsheet_id}
+                    onChange={(e) => setEditUserData({ ...editUserData, google_spreadsheet_id: e.target.value })}
+                    className="font-mono text-xs"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">اسم ورقة العمل (Sheet Name)</Label>
+                  <Input
+                    placeholder="Sessions"
+                    value={editUserData.google_sheet_name}
+                    onChange={(e) => setEditUserData({ ...editUserData, google_sheet_name: e.target.value })}
+                    className="text-xs"
+                  />
                 </div>
               </div>
 

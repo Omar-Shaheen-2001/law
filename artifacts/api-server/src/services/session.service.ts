@@ -58,23 +58,34 @@ const COLUMN_INDEX: Record<string, number> = {
 
 function cell(row: SheetRow, name: string): string {
   const index = COLUMN_INDEX[name];
-  return index !== undefined ? (row[index] ?? "") : "";
+  if (index === undefined) return "";
+  return row[index] ?? "";
 }
 
-function nullableString(value: string): string | null {
-  return value === "" ? null : value;
+function nullableString(value: string | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
-
-const VALID_STATUSES = new Set<SessionStatus>(["Upcoming", "Today", "Finished", "Cancelled"]);
 
 function parseStatus(raw: string): SessionStatus {
-  if (VALID_STATUSES.has(raw as SessionStatus)) {
-    return raw as SessionStatus;
-  }
+  const normalized = raw.trim();
+  if (normalized === "Upcoming" || normalized === "قادمة") return "Upcoming";
+  if (normalized === "Today" || normalized === "اليوم") return "Today";
+  if (normalized === "Finished" || normalized === "منتهية") return "Finished";
+  if (normalized === "Cancelled" || normalized === "ملغاة") return "Cancelled";
   return "Upcoming";
 }
 
-const ARABIC_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const ARABIC_DAYS = [
+  "الأحد",
+  "الاثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+];
 
 export function computeSessionDayStr(
   sessionDateHijri: string | null | undefined,
@@ -238,9 +249,9 @@ export function sortSessionsByNearestTime(sessions: Session[]): Session[] {
   });
 }
 
-export async function listSessions(statusFilter?: SessionStatus): Promise<Session[]> {
-  await ensureSheetReady();
-  const rows = await listRows();
+export async function listSessions(statusFilter?: SessionStatus, userId?: string): Promise<Session[]> {
+  await ensureSheetReady(userId);
+  const rows = await listRows(userId);
   let sessions = rows
     .map(({ id, values }) => {
       const s = rowToSession(id, values);
@@ -254,7 +265,7 @@ export async function listSessions(statusFilter?: SessionStatus): Promise<Sessio
         updateRowCells(id, {
           [COLUMN_INDEX["Days Remaining"]]: expectedRemaining,
           [COLUMN_INDEX["Session Day"]]: expectedDay,
-        }).catch((err) => logger.warn({ err, id }, "Failed to auto-sync row cells"));
+        }, userId).catch((err) => logger.warn({ err, id, userId }, "Failed to auto-sync row cells"));
       }
       return s;
     });
@@ -266,25 +277,26 @@ export async function listSessions(statusFilter?: SessionStatus): Promise<Sessio
   return sortSessionsByNearestTime(sessions);
 }
 
-export async function getSessionById(id: number): Promise<Session | null> {
-  const rows = await listRows();
+export async function getSessionById(id: number, userId?: string): Promise<Session | null> {
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
   return match ? rowToSession(match.id, match.values) : null;
 }
 
-export async function createSession(input: SessionInput): Promise<Session> {
-  await ensureSheetReady();
+export async function createSession(input: SessionInput, userId?: string): Promise<Session> {
+  await ensureSheetReady(userId);
   const createdAt = new Date().toISOString();
   const row = sessionInputToRow(input, createdAt);
-  const id = await appendRow(row);
+  const id = await appendRow(row, userId);
   return rowToSession(id, row);
 }
 
 export async function updateSession(
   id: number,
   patch: SessionUpdate,
+  userId?: string,
 ): Promise<Session | null> {
-  const rows = await listRows();
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
   if (!match) {
     return null;
@@ -319,17 +331,26 @@ export async function updateSession(
     merged.createdAt,                    // 15: تاريخ الإنشاء
     existingReport,                      // 16: التقرير
   ];
-  await updateRow(id, row);
+  await updateRow(id, row, userId);
   return merged;
 }
 
-export async function deleteSession(id: number): Promise<boolean> {
-  const existing = await getSessionById(id);
+export async function deleteSession(id: number, userId?: string): Promise<boolean> {
+  const existing = await getSessionById(id, userId);
   if (!existing) {
     return false;
   }
-  await deleteRow(id);
+  await deleteRow(id, userId);
   return true;
+}
+
+export async function markReminderSent(
+  id: number,
+  kind: "24h" | "6h",
+  userId?: string,
+): Promise<void> {
+  const colIndex = kind === "24h" ? COLUMN_INDEX["Reminder24"] : COLUMN_INDEX["Reminder6"];
+  await updateRowCells(id, { [colIndex]: "true" }, userId);
 }
 
 export interface DashboardStats {
@@ -346,158 +367,115 @@ export interface DashboardStats {
   urgentTasks: number;
 }
 
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(userId?: string): Promise<DashboardStats> {
   const [sessionsRes, poaRes, judgmentRes, taskRes] = await Promise.allSettled([
-    listSessions(),
+    listSessions(undefined, userId),
     listPoaRows(),
     listJudgmentRowsWithHeaders(),
     listTaskRowsWithHeaders(),
   ]);
 
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
-  const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
-  const judgmentResult = judgmentRes.status === "fulfilled"
-    ? judgmentRes.value
-    : { headers: ["رقم القضية","المحكمة المختصة","المدعي","المدعى عليه","المحامي المكلف","رقم الصك","تاريخ الحكم","ملخص الحكم","الحكم","تاريخ الإنشاء"], rows: [] };
-  const taskResult = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
+  const poas = poaRes.status === "fulfilled" ? poaRes.value : [];
+  const judgmentData = judgmentRes.status === "fulfilled" ? judgmentRes.value : { headers: [], rows: [] };
+  const taskData = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
 
-  if (sessionsRes.status === "rejected") {
-    logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
-  }
-  if (poaRes.status === "rejected") {
-    logger.warn({ err: poaRes.reason }, "Failed to load POA rows for dashboard stats");
-  }
-  if (judgmentRes.status === "rejected") {
-    logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
-  }
-  if (taskRes.status === "rejected") {
-    logger.warn({ err: taskRes.reason }, "Failed to load Task rows for dashboard stats");
-  }
-
+  const uniqueCases = new Set<string>();
   let todayHearings = 0;
   let upcomingHearings = 0;
   let finishedHearings = 0;
-  for (const session of sessions) {
-    const effective = deriveEffectiveStatus(session);
-    if (effective === "Today") todayHearings += 1;
-    else if (effective === "Upcoming") upcomingHearings += 1;
-    else if (effective === "Finished") finishedHearings += 1;
+
+  for (const s of sessions) {
+    if (s.caseNumber && s.caseNumber.trim()) {
+      uniqueCases.add(s.caseNumber.trim());
+    }
+    const status = deriveEffectiveStatus(s);
+    if (status === "Today") todayHearings++;
+    else if (status === "Upcoming") upcomingHearings++;
+    else if (status === "Finished") finishedHearings++;
   }
 
-  // Resolve column index for "الحكم" from actual Row 1 headers (handles old/new schemas)
-  const judgmentColIdx = judgmentResult.headers.findIndex(
-    (h) => h === "الحكم" || h === "هل الحكم لصالح العميل",
-  );
-
-  let favorableJudgments = 0;
-  let unfavorableJudgments = 0;
-  for (const row of judgmentResult.rows) {
-    const rawVal = judgmentColIdx !== -1 ? (row.values[judgmentColIdx] || "") : "";
-    const val = rawVal.trim();
-    if (val === "ابتدائي" || val === "لا") {
-      unfavorableJudgments += 1;
-    } else {
-      // "نهائي", "نعم", or any other value — count as final/favorable
-      favorableJudgments += 1;
+  for (const j of judgmentData.rows) {
+    const caseNumber = j.values[0];
+    if (caseNumber && caseNumber.trim()) {
+      uniqueCases.add(caseNumber.trim());
     }
   }
 
-  // Count task stats from the Tasks sheet
-  const TASK_HEADERS = ["عنوان المهمة","المكلف","الأولوية","تاريخ التسليم","عدد الأيام المتبقية","الحالة","ملاحظات","تاريخ الإنشاء"];
-  const taskStatusIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "الحالة");
-  const taskPriorityIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "الأولوية");
+  let favorableJudgments = 0;
+  let unfavorableJudgments = 0;
+  for (const j of judgmentData.rows) {
+    const ruling = (j.values[8] || "").trim();
+    if (ruling === "لصالحنا" || ruling.toLowerCase() === "favorable") {
+      favorableJudgments++;
+    } else if (ruling === "ضدنا" || ruling.toLowerCase() === "unfavorable") {
+      unfavorableJudgments++;
+    }
+  }
 
   let inProgressTasks = 0;
   let completedTasks = 0;
   let urgentTasks = 0;
-  for (const row of taskResult.rows) {
-    const status = taskStatusIdx !== -1 ? (row.values[taskStatusIdx] || "").trim() : "";
-    const priority = taskPriorityIdx !== -1 ? (row.values[taskPriorityIdx] || "").trim() : "";
-    if (status === "قيد التنفيذ") inProgressTasks += 1;
-    if (status === "مكتملة") completedTasks += 1;
-    if (priority === "عاجلة") urgentTasks += 1;
+  for (const t of taskData.rows) {
+    const status = (t.values[4] || "").trim();
+    const priority = (t.values[3] || "").trim();
+
+    if (status === "قيد التنفيذ" || status === "جديدة" || status === "قيد المراجعة") {
+      inProgressTasks++;
+    } else if (status === "مكتملة") {
+      completedTasks++;
+    }
+
+    if (priority === "عاجلة" || priority === "عالية") {
+      urgentTasks++;
+    }
   }
 
   return {
-    totalCases: sessions.length,
+    totalCases: uniqueCases.size,
     todayHearings,
     upcomingHearings,
     finishedHearings,
-    totalPoas: poaRows.length,
+    totalPoas: poas.length,
     favorableJudgments,
     unfavorableJudgments,
-    totalTasks: taskResult.rows.length,
+    totalTasks: taskData.rows.length,
     inProgressTasks,
     completedTasks,
     urgentTasks,
   };
 }
 
-/** Marks a session's Reminder24/Reminder6 flag as sent (used by the scheduler). */
-export async function markReminderSent(
-  id: number,
-  kind: "24h" | "6h",
-): Promise<void> {
-  const columnName = kind === "24h" ? "Reminder24" : "Reminder6";
-  await updateRowCells(id, { [COLUMN_INDEX[columnName]]: "true" });
-}
-
-// ─── Session Reports ──────────────────────────────────────────────────────────
-
-export interface SessionReportData {
-  reportNumber: string;
-  lawyerName: string;
-  summary: string;
-  courtDecision: string;
-  nextSessionDate: string;
-  nextSessionTime: string;
-  ourActionRequired: string;
-  clientActionRequired: string;
-  reportDate: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Returns the saved report for a session, or null if none exists yet. */
-export async function getSessionReport(id: number): Promise<SessionReportData | null> {
-  await ensureSheetReady();
-  const rows = await listRows();
+export async function getSessionReport(id: number, userId?: string): Promise<{ session: Session; report: string | null } | null> {
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
-  if (!match) return null;
-  const raw = match.values[COLUMN_INDEX["Report"]] ?? "";
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as SessionReportData;
-  } catch {
+  if (!match) {
     return null;
   }
+  const session = rowToSession(match.id, match.values);
+  const rawReport = match.values[COLUMN_INDEX["Report"]];
+  const report = rawReport && rawReport.trim().length > 0 ? rawReport.trim() : null;
+  return { session, report };
 }
 
-/** Creates or updates the report for a session. */
-export async function upsertSessionReport(
-  id: number,
-  input: Partial<SessionReportData>,
-): Promise<SessionReportData | null> {
-  await ensureSheetReady();
-  const existing = await getSessionById(id);
-  if (!existing) return null;
-
-  const now = new Date().toISOString();
-  const current = await getSessionReport(id);
-  const updated: SessionReportData = {
-    reportNumber: input.reportNumber ?? current?.reportNumber ?? "01",
-    lawyerName: input.lawyerName ?? current?.lawyerName ?? "",
-    summary: input.summary ?? current?.summary ?? "",
-    courtDecision: input.courtDecision ?? current?.courtDecision ?? "",
-    nextSessionDate: input.nextSessionDate ?? current?.nextSessionDate ?? "",
-    nextSessionTime: input.nextSessionTime ?? current?.nextSessionTime ?? "",
-    ourActionRequired: input.ourActionRequired ?? current?.ourActionRequired ?? "",
-    clientActionRequired: input.clientActionRequired ?? current?.clientActionRequired ?? "",
-    reportDate: input.reportDate ?? current?.reportDate ?? now.split("T")[0],
-    createdAt: current?.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  await updateRowCells(id, { [COLUMN_INDEX["Report"]]: JSON.stringify(updated) });
-  return updated;
+export async function saveSessionReport(id: number, report: string, userId?: string): Promise<{ session: Session; report: string } | null> {
+  const rows = await listRows(userId);
+  const match = rows.find((r) => r.id === id);
+  if (!match) {
+    return null;
+  }
+  await updateRowCells(id, { [COLUMN_INDEX["Report"]]: report }, userId);
+  const session = rowToSession(match.id, match.values);
+  return { session, report };
 }
+
+export {
+  SHEET_COLUMNS,
+  COLUMN_INDEX,
+  cell,
+  nullableString,
+  parseStatus,
+  deriveEffectiveStatus,
+  rowToSession,
+  sessionInputToRow,
+};

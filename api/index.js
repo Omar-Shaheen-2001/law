@@ -63156,6 +63156,15 @@ var import_bcryptjs = __toESM(require_bcryptjs(), 1);
 var _supabaseClient = null;
 var _lastUrl = void 0;
 var _lastKey = void 0;
+var userGoogleCredsCache = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 60 * 1e3;
+function invalidateUserGoogleCache(userId) {
+  if (userId) {
+    userGoogleCredsCache.delete(userId);
+  } else {
+    userGoogleCredsCache.clear();
+  }
+}
 function getSupabaseClient() {
   if (!isSupabaseConfigured()) {
     return null;
@@ -63219,7 +63228,7 @@ async function verifySupabaseUser(usernameOrEmail, plainPassword) {
   try {
     const tableName = env.supabaseTableName;
     const cleanIdentifier = usernameOrEmail.trim().toLowerCase();
-    const { data, error } = await client.from(tableName).select("id, username, email, role, display_name, password_hash, created_at").or(`username.ilike.${cleanIdentifier},email.ilike.${cleanIdentifier}`).limit(1);
+    const { data, error } = await client.from(tableName).select("id, username, email, role, display_name, password_hash, google_spreadsheet_id, google_sheet_name, created_at").or(`username.ilike.${cleanIdentifier},email.ilike.${cleanIdentifier}`).limit(1);
     if (error || !data || data.length === 0) {
       return null;
     }
@@ -63246,10 +63255,46 @@ async function verifySupabaseUser(usernameOrEmail, plainPassword) {
       email: record.email,
       role: record.role || "staff",
       display_name: record.display_name,
+      google_spreadsheet_id: record.google_spreadsheet_id,
+      google_sheet_name: record.google_sheet_name,
       created_at: record.created_at
     };
   } catch (err) {
     logger.error({ err }, "Error verifying user against Supabase");
+    return null;
+  }
+}
+async function getUserGoogleCredentials(userId) {
+  if (!userId || userId === "local-admin" || userId === "local-default") {
+    return null;
+  }
+  const cached = userGoogleCredsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const tableName = env.supabaseTableName;
+    const { data, error } = await client.from(tableName).select("google_service_account_json, google_spreadsheet_id, google_sheet_name").eq("id", userId).single();
+    if (error || !data) return null;
+    let parsedJson = void 0;
+    if (data.google_service_account_json) {
+      try {
+        parsedJson = typeof data.google_service_account_json === "string" ? JSON.parse(data.google_service_account_json) : data.google_service_account_json;
+      } catch (err) {
+        logger.warn({ err, userId }, "Failed to parse user google_service_account_json");
+      }
+    }
+    const creds = {
+      serviceAccountJson: parsedJson,
+      spreadsheetId: data.google_spreadsheet_id?.trim() || void 0,
+      sheetName: data.google_sheet_name?.trim() || void 0
+    };
+    userGoogleCredsCache.set(userId, { data: creds, timestamp: Date.now() });
+    return creds;
+  } catch (err) {
+    logger.error({ err, userId }, "Error getting user Google credentials from Supabase");
     return null;
   }
 }
@@ -63263,24 +63308,52 @@ async function listSupabaseUsers() {
         email: "admin@law.internal",
         role: "admin",
         display_name: "\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A",
+        has_google_service: false,
+        google_spreadsheet_id: null,
+        google_sheet_name: null,
         created_at: (/* @__PURE__ */ new Date()).toISOString()
       }
     ];
   }
   const tableName = env.supabaseTableName;
-  const { data, error } = await client.from(tableName).select("id, username, email, role, display_name, created_at").order("created_at", { ascending: false });
+  const { data, error } = await client.from(tableName).select("id, username, email, role, display_name, google_service_account_json, google_spreadsheet_id, google_sheet_name, created_at").order("created_at", { ascending: false });
   if (error) {
     logger.error({ error }, "Failed to list users from Supabase");
     throw new Error(
       `\u0641\u0634\u0644 \u062C\u0644\u0628 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0645\u0646 Supabase: ${error.message}. \u062A\u0623\u0643\u062F \u0645\u0646 \u0625\u0646\u0634\u0627\u0621 \u062C\u062F\u0648\u0644 ${tableName}.`
     );
   }
-  return data || [];
+  return (data || []).map((u) => ({
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    role: u.role || "staff",
+    display_name: u.display_name,
+    has_google_service: Boolean(u.google_service_account_json && u.google_service_account_json.trim().length > 10),
+    google_spreadsheet_id: u.google_spreadsheet_id || null,
+    google_sheet_name: u.google_sheet_name || null,
+    created_at: u.created_at
+  }));
+}
+function sanitizeGoogleServiceJson(raw) {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw.trim()) : raw;
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Invalid JSON object");
+    }
+    if (!parsed.client_email || !parsed.private_key) {
+      throw new Error("\u0645\u0644\u0641 Service Account JSON \u064A\u062C\u0628 \u0623\u0646 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 client_email \u0648 private_key.");
+    }
+    return JSON.stringify(parsed);
+  } catch (err) {
+    throw new Error(err.message || "\u0635\u064A\u063A\u0629 Google Service Account JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629.");
+  }
 }
 async function createSupabaseUser(input) {
   const client = getSupabaseClient();
   if (!client) {
-    throw new Error("Supabase \u063A\u064A\u0631 \u0645\u062A\u0635\u0644. \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 Supabase URL \u0648 Key \u0641\u064A \u0635\u0641\u062D\u0629 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u0627\u064B.");
+    throw new Error("Supabase \u063A\u064A\u0631 \u0645\u062A\u0635\u0644. \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 Supabase URL \u0648 Key \u0641\u064A \u0635\u0641\u062D\u0629 \u0627\u0644\u0625\u062F\u0627\u0631\u0629 \u0623\u0648\u0644\u0627\u064B.");
   }
   const tableName = env.supabaseTableName;
   const username = input.username.trim().toLowerCase();
@@ -63291,6 +63364,7 @@ async function createSupabaseUser(input) {
   if (!password || password.length < 4) {
     throw new Error("\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u064A\u062C\u0628 \u0623\u0644\u0627 \u062A\u0642\u0644 \u0639\u0646 4 \u062E\u0627\u0646\u0627\u062A.");
   }
+  const sanitizedGoogleJson = sanitizeGoogleServiceJson(input.google_service_account_json);
   const { data: existing } = await client.from(tableName).select("id").ilike("username", username).limit(1);
   if (existing && existing.length > 0) {
     throw new Error(`\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 "${username}" \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B.`);
@@ -63301,20 +63375,34 @@ async function createSupabaseUser(input) {
     email: input.email?.trim() || null,
     password_hash,
     role: input.role || "staff",
-    display_name: input.display_name?.trim() || username
+    display_name: input.display_name?.trim() || username,
+    google_service_account_json: sanitizedGoogleJson,
+    google_spreadsheet_id: input.google_spreadsheet_id?.trim() || null,
+    google_sheet_name: input.google_sheet_name?.trim() || null
   };
-  const { data, error } = await client.from(tableName).insert([newUserData]).select("id, username, email, role, display_name, created_at").single();
+  const { data, error } = await client.from(tableName).insert([newUserData]).select("id, username, email, role, display_name, google_spreadsheet_id, google_sheet_name, created_at").single();
   if (error) {
     logger.error({ error }, "Failed to insert user into Supabase");
     throw new Error(`\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645: ${error.message}`);
   }
-  return data;
+  return {
+    id: data.id,
+    username: data.username,
+    email: data.email,
+    role: data.role,
+    display_name: data.display_name,
+    has_google_service: Boolean(sanitizedGoogleJson),
+    google_spreadsheet_id: data.google_spreadsheet_id,
+    google_sheet_name: data.google_sheet_name,
+    created_at: data.created_at
+  };
 }
 async function deleteSupabaseUser(id) {
   const client = getSupabaseClient();
   if (!client) {
     throw new Error("Supabase \u063A\u064A\u0631 \u0645\u062A\u0635\u0644.");
   }
+  invalidateUserGoogleCache(id);
   const tableName = env.supabaseTableName;
   const { error } = await client.from(tableName).delete().eq("id", id);
   if (error) {
@@ -63344,15 +63432,35 @@ async function updateSupabaseUser(id, input) {
   if (input.email !== void 0) {
     updates.email = input.email.trim() || null;
   }
+  if (input.google_service_account_json !== void 0) {
+    updates.google_service_account_json = sanitizeGoogleServiceJson(input.google_service_account_json);
+  }
+  if (input.google_spreadsheet_id !== void 0) {
+    updates.google_spreadsheet_id = input.google_spreadsheet_id.trim() || null;
+  }
+  if (input.google_sheet_name !== void 0) {
+    updates.google_sheet_name = input.google_sheet_name.trim() || null;
+  }
   if (Object.keys(updates).length === 0) {
     throw new Error("\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0644\u062A\u0639\u062F\u064A\u0644.");
   }
-  const { data, error } = await client.from(tableName).update(updates).eq("id", id).select("id, username, email, role, display_name, created_at").single();
+  invalidateUserGoogleCache(id);
+  const { data, error } = await client.from(tableName).update(updates).eq("id", id).select("id, username, email, role, display_name, google_service_account_json, google_spreadsheet_id, google_sheet_name, created_at").single();
   if (error) {
     logger.error({ error, id }, "Failed to update user in Supabase");
     throw new Error(`\u0641\u0634\u0644 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645: ${error.message}`);
   }
-  return data;
+  return {
+    id: data.id,
+    username: data.username,
+    email: data.email,
+    role: data.role,
+    display_name: data.display_name,
+    has_google_service: Boolean(data.google_service_account_json && data.google_service_account_json.trim().length > 10),
+    google_spreadsheet_id: data.google_spreadsheet_id,
+    google_sheet_name: data.google_sheet_name,
+    created_at: data.created_at
+  };
 }
 
 // src/routes/auth.ts
@@ -63505,9 +63613,10 @@ var SHEET_COLUMNS = [
   "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621",
   "\u0627\u0644\u062A\u0642\u0631\u064A\u0631"
 ];
-var sheetsClient = null;
-function getClient() {
-  if (!sheetsClient) {
+var defaultSheetsClient = null;
+var userClientsMap = /* @__PURE__ */ new Map();
+function getDefaultClient() {
+  if (!defaultSheetsClient) {
     const credentials = env.googleServiceAccountJson;
     if (!credentials.client_email || !credentials.private_key) {
       throw new Error(
@@ -63520,80 +63629,95 @@ function getClient() {
       key: privateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"]
     });
-    sheetsClient = import_googleapis.google.sheets({ version: "v4", auth });
+    defaultSheetsClient = import_googleapis.google.sheets({ version: "v4", auth });
   }
-  return sheetsClient;
+  return defaultSheetsClient;
 }
-function headerRange() {
-  return `${env.googleSheetName}!A1:Q1`;
-}
-var sheetIdCache = null;
-async function getSheetId() {
-  if (sheetIdCache !== null) {
-    return sheetIdCache;
+async function getGoogleContext(userId) {
+  if (userId) {
+    const userCreds = await getUserGoogleCredentials(userId);
+    if (userCreds && userCreds.serviceAccountJson && typeof userCreds.serviceAccountJson === "object") {
+      const credentials = userCreds.serviceAccountJson;
+      if (credentials.client_email && credentials.private_key) {
+        let client = userClientsMap.get(userId);
+        if (!client) {
+          const privateKey = credentials.private_key.replace(/\\n/g, "\n");
+          const auth = new import_googleapis.google.auth.JWT({
+            email: credentials.client_email,
+            key: privateKey,
+            scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+          });
+          client = import_googleapis.google.sheets({ version: "v4", auth });
+          userClientsMap.set(userId, client);
+        }
+        const spreadsheetId = userCreds.spreadsheetId || env.googleSpreadsheetId;
+        const sheetName = userCreds.sheetName || env.googleSheetName;
+        return { sheets: client, spreadsheetId, sheetName };
+      }
+    }
   }
-  const sheets = getClient();
-  const spreadsheet = await sheets.spreadsheets.get({
-    spreadsheetId: env.googleSpreadsheetId
+  return {
+    sheets: getDefaultClient(),
+    spreadsheetId: env.googleSpreadsheetId,
+    sheetName: env.googleSheetName
+  };
+}
+async function getSheetId(ctx) {
+  const spreadsheet = await ctx.sheets.spreadsheets.get({
+    spreadsheetId: ctx.spreadsheetId
   });
   const sheet = spreadsheet.data.sheets?.find(
-    (s) => s.properties?.title === env.googleSheetName
+    (s) => s.properties?.title === ctx.sheetName
   );
   if (!sheet?.properties?.sheetId && sheet?.properties?.sheetId !== 0) {
     throw new Error(
-      `Sheet tab "${env.googleSheetName}" was not found in the configured spreadsheet.`
+      `Sheet tab "${ctx.sheetName}" was not found in the configured spreadsheet.`
     );
   }
-  sheetIdCache = sheet.properties.sheetId;
-  return sheetIdCache;
+  return sheet.properties.sheetId;
 }
-var sheetReadyCache = false;
-async function ensureSheetReady() {
-  if (sheetReadyCache) return;
+async function ensureSheetReady(userId) {
   try {
-    const sheets = getClient();
-    const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: env.googleSpreadsheetId
+    const ctx = await getGoogleContext(userId);
+    const spreadsheet = await ctx.sheets.spreadsheets.get({
+      spreadsheetId: ctx.spreadsheetId
     });
     const existing = spreadsheet.data.sheets?.find(
-      (s) => s.properties?.title === env.googleSheetName
+      (s) => s.properties?.title === ctx.sheetName
     );
     if (!existing) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: env.googleSpreadsheetId,
+      await ctx.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: ctx.spreadsheetId,
         requestBody: {
-          requests: [{ addSheet: { properties: { title: env.googleSheetName } } }]
+          requests: [{ addSheet: { properties: { title: ctx.sheetName } } }]
         }
       });
-      sheetIdCache = null;
     }
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: env.googleSpreadsheetId,
-      range: headerRange(),
+    await ctx.sheets.spreadsheets.values.update({
+      spreadsheetId: ctx.spreadsheetId,
+      range: `${ctx.sheetName}!A1:Q1`,
       valueInputOption: "RAW",
       requestBody: { values: [[...SHEET_COLUMNS]] }
     });
-    sheetReadyCache = true;
   } catch (err) {
-    sheetReadyCache = false;
-    logger.warn({ err }, "ensureSheetReady non-fatal warning");
+    logger.warn({ err, userId }, "ensureSheetReady non-fatal warning");
   }
 }
-async function listRows() {
-  const sheets = getClient();
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.googleSpreadsheetId,
-    range: `${env.googleSheetName}!A2:Q`
+async function listRows(userId) {
+  const ctx = await getGoogleContext(userId);
+  const response = await ctx.sheets.spreadsheets.values.get({
+    spreadsheetId: ctx.spreadsheetId,
+    range: `${ctx.sheetName}!A2:Q`
   });
   const rows = response.data.values ?? [];
   return rows.map((row, index) => ({ id: index + 2, values: row })).filter((row) => row.values.some((cell2) => cell2 !== void 0 && cell2 !== ""));
 }
-async function appendRow(values) {
-  const sheets = getClient();
+async function appendRow(values, userId) {
+  const ctx = await getGoogleContext(userId);
   try {
-    const existing = await sheets.spreadsheets.values.get({
-      spreadsheetId: env.googleSpreadsheetId,
-      range: `${env.googleSheetName}!A2:Q`
+    const existing = await ctx.sheets.spreadsheets.values.get({
+      spreadsheetId: ctx.spreadsheetId,
+      range: `${ctx.sheetName}!A2:Q`
     });
     const rawRows = existing.data.values ?? [];
     let emptyRowId = null;
@@ -63606,15 +63730,15 @@ async function appendRow(values) {
       }
     }
     if (emptyRowId !== null) {
-      await updateRow(emptyRowId, values);
+      await updateRow(emptyRowId, values, userId);
       return emptyRowId;
     }
   } catch (err) {
-    logger.warn({ err }, "Failed to check empty rows before append, falling back to append API");
+    logger.warn({ err, userId }, "Failed to check empty rows before append, falling back to append API");
   }
-  const response = await sheets.spreadsheets.values.append({
-    spreadsheetId: env.googleSpreadsheetId,
-    range: `${env.googleSheetName}!A:Q`,
+  const response = await ctx.sheets.spreadsheets.values.append({
+    spreadsheetId: ctx.spreadsheetId,
+    range: `${ctx.sheetName}!A:Q`,
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [values] }
@@ -63624,45 +63748,45 @@ async function appendRow(values) {
   if (match) {
     return Number(match[1]);
   }
-  logger.warn({ updatedRange }, "Could not parse appended row id from Sheets response");
-  const rows = await listRows();
+  logger.warn({ updatedRange, userId }, "Could not parse appended row id from Sheets response");
+  const rows = await listRows(userId);
   const last = rows[rows.length - 1];
   if (!last) {
     throw new Error("Failed to determine id of newly created session row.");
   }
   return last.id;
 }
-async function updateRow(id, values) {
-  const sheets = getClient();
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: env.googleSpreadsheetId,
-    range: `${env.googleSheetName}!A${id}:Q${id}`,
+async function updateRow(id, values, userId) {
+  const ctx = await getGoogleContext(userId);
+  await ctx.sheets.spreadsheets.values.update({
+    spreadsheetId: ctx.spreadsheetId,
+    range: `${ctx.sheetName}!A${id}:Q${id}`,
     valueInputOption: "RAW",
     requestBody: { values: [values] }
   });
 }
-async function updateRowCells(id, updates) {
-  const sheets = getClient();
+async function updateRowCells(id, updates, userId) {
+  const ctx = await getGoogleContext(userId);
   const data = Object.entries(updates).map(([colIndex, value]) => {
     const column = String.fromCharCode("A".charCodeAt(0) + Number(colIndex));
     return {
-      range: `${env.googleSheetName}!${column}${id}:${column}${id}`,
+      range: `${ctx.sheetName}!${column}${id}:${column}${id}`,
       values: [[value]]
     };
   });
   if (data.length === 0) {
     return;
   }
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: env.googleSpreadsheetId,
+  await ctx.sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: ctx.spreadsheetId,
     requestBody: { valueInputOption: "RAW", data }
   });
 }
-async function deleteRow(id) {
-  const sheets = getClient();
-  const sheetId = await getSheetId();
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.googleSpreadsheetId,
+async function deleteRow(id, userId) {
+  const ctx = await getGoogleContext(userId);
+  const sheetId = await getSheetId(ctx);
+  await ctx.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: ctx.spreadsheetId,
     requestBody: {
       requests: [
         {
@@ -63845,9 +63969,9 @@ var POA_SHEET_COLUMNS = [
 ];
 var POA_COLS = POA_SHEET_COLUMNS.length;
 var COL_LAST = String.fromCharCode("A".charCodeAt(0) + POA_COLS - 1);
-var sheetsClient2 = null;
-function getClient2() {
-  if (!sheetsClient2) {
+var sheetsClient = null;
+function getClient() {
+  if (!sheetsClient) {
     const credentials = env.googleServiceAccountJson;
     if (!credentials.client_email || !credentials.private_key) {
       throw new Error(
@@ -63860,9 +63984,9 @@ function getClient2() {
       key: privateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"]
     });
-    sheetsClient2 = import_googleapis2.google.sheets({ version: "v4", auth });
+    sheetsClient = import_googleapis2.google.sheets({ version: "v4", auth });
   }
-  return sheetsClient2;
+  return sheetsClient;
 }
 var poaSheetIdCache = null;
 var isPoaSheetReadyCache = false;
@@ -63875,7 +63999,7 @@ function invalidatePoaCache() {
 }
 async function getPoaSheetId() {
   if (poaSheetIdCache !== null) return poaSheetIdCache;
-  const sheets = getClient2();
+  const sheets = getClient();
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: env.googleSpreadsheetId
   });
@@ -63891,7 +64015,7 @@ async function getPoaSheetId() {
 async function ensurePoaSheetReady() {
   if (isPoaSheetReadyCache) return;
   try {
-    const sheets = getClient2();
+    const sheets = getClient();
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: env.googleSpreadsheetId
     });
@@ -63927,7 +64051,7 @@ async function listPoaRows(forceRefresh = false) {
   }
   await ensurePoaSheetReady();
   try {
-    const sheets = getClient2();
+    const sheets = getClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: env.googleSpreadsheetId,
       range: `${POA_SHEET_NAME}!A2:${COL_LAST}`
@@ -63944,7 +64068,7 @@ async function listPoaRows(forceRefresh = false) {
 }
 async function appendPoaRow(values) {
   invalidatePoaCache();
-  const sheets = getClient2();
+  const sheets = getClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${POA_SHEET_NAME}!A:${COL_LAST}`,
@@ -63962,7 +64086,7 @@ async function appendPoaRow(values) {
 }
 async function updatePoaRow(id, values) {
   invalidatePoaCache();
-  const sheets = getClient2();
+  const sheets = getClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.googleSpreadsheetId,
     range: `${POA_SHEET_NAME}!A${id}:${COL_LAST}${id}`,
@@ -63972,7 +64096,7 @@ async function updatePoaRow(id, values) {
 }
 async function deletePoaRow(id) {
   invalidatePoaCache();
-  const sheets = getClient2();
+  const sheets = getClient();
   const sheetId = await getPoaSheetId();
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64010,9 +64134,9 @@ var JUDGMENT_SHEET_COLUMNS = [
 ];
 var JUDGMENT_COLS = JUDGMENT_SHEET_COLUMNS.length;
 var COL_LAST2 = String.fromCharCode("A".charCodeAt(0) + JUDGMENT_COLS - 1);
-var sheetsClient3 = null;
-function getClient3() {
-  if (!sheetsClient3) {
+var sheetsClient2 = null;
+function getClient2() {
+  if (!sheetsClient2) {
     const credentials = env.googleServiceAccountJson;
     if (!credentials.client_email || !credentials.private_key) {
       throw new Error(
@@ -64025,9 +64149,9 @@ function getClient3() {
       key: privateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"]
     });
-    sheetsClient3 = import_googleapis3.google.sheets({ version: "v4", auth });
+    sheetsClient2 = import_googleapis3.google.sheets({ version: "v4", auth });
   }
-  return sheetsClient3;
+  return sheetsClient2;
 }
 var judgmentSheetIdCache = null;
 var isJudgmentSheetReadyCache = false;
@@ -64040,7 +64164,7 @@ function invalidateJudgmentCache() {
 }
 async function getJudgmentSheetId() {
   if (judgmentSheetIdCache !== null) return judgmentSheetIdCache;
-  const sheets = getClient3();
+  const sheets = getClient2();
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: env.googleSpreadsheetId
   });
@@ -64056,7 +64180,7 @@ async function getJudgmentSheetId() {
 async function ensureJudgmentSheetReady() {
   if (isJudgmentSheetReadyCache) return;
   try {
-    const sheets = getClient3();
+    const sheets = getClient2();
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: env.googleSpreadsheetId
     });
@@ -64151,7 +64275,7 @@ async function listJudgmentRowsWithHeaders(forceRefresh = false) {
   const now = Date.now();
   const useCache = !forceRefresh && judgmentDataCache !== null && now - lastJudgmentCacheTime < JUDGMENT_CACHE_TTL_MS;
   try {
-    const sheets = getClient3();
+    const sheets = getClient2();
     if (useCache) {
       const headerRes = await sheets.spreadsheets.values.get({
         spreadsheetId: env.googleSpreadsheetId,
@@ -64181,7 +64305,7 @@ async function listJudgmentRowsWithHeaders(forceRefresh = false) {
 }
 async function appendJudgmentRow(values) {
   invalidateJudgmentCache();
-  const sheets = getClient3();
+  const sheets = getClient2();
   const paddedValues = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64201,7 +64325,7 @@ async function appendJudgmentRow(values) {
 }
 async function updateJudgmentRow(id, values) {
   invalidateJudgmentCache();
-  const sheets = getClient3();
+  const sheets = getClient2();
   const paddedValues = Array.from({ length: JUDGMENT_COLS }, (_, i) => values[i] ?? "");
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64212,7 +64336,7 @@ async function updateJudgmentRow(id, values) {
 }
 async function deleteJudgmentRow(id) {
   invalidateJudgmentCache();
-  const sheets = getClient3();
+  const sheets = getClient2();
   const sheetId = await getJudgmentSheetId();
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64248,9 +64372,9 @@ var TASK_SHEET_COLUMNS = [
 ];
 var TASK_COLS = TASK_SHEET_COLUMNS.length;
 var COL_LAST3 = String.fromCharCode("A".charCodeAt(0) + TASK_COLS - 1);
-var sheetsClient4 = null;
-function getClient4() {
-  if (!sheetsClient4) {
+var sheetsClient3 = null;
+function getClient3() {
+  if (!sheetsClient3) {
     const credentials = env.googleServiceAccountJson;
     if (!credentials.client_email || !credentials.private_key) {
       throw new Error(
@@ -64263,9 +64387,9 @@ function getClient4() {
       key: privateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"]
     });
-    sheetsClient4 = import_googleapis4.google.sheets({ version: "v4", auth });
+    sheetsClient3 = import_googleapis4.google.sheets({ version: "v4", auth });
   }
-  return sheetsClient4;
+  return sheetsClient3;
 }
 var taskSheetIdCache = null;
 var isTaskSheetReadyCache = false;
@@ -64278,7 +64402,7 @@ function invalidateTaskCache() {
 }
 async function getTaskSheetId() {
   if (taskSheetIdCache !== null) return taskSheetIdCache;
-  const sheets = getClient4();
+  const sheets = getClient3();
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: env.googleSpreadsheetId
   });
@@ -64294,7 +64418,7 @@ async function getTaskSheetId() {
 async function ensureTaskSheetReady() {
   if (isTaskSheetReadyCache) return;
   try {
-    const sheets = getClient4();
+    const sheets = getClient3();
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: env.googleSpreadsheetId
     });
@@ -64367,7 +64491,7 @@ async function listTaskRowsWithHeaders(forceRefresh = false) {
   const now = Date.now();
   const useCache = !forceRefresh && taskDataCache !== null && now - lastTaskCacheTime < TASK_CACHE_TTL_MS;
   try {
-    const sheets = getClient4();
+    const sheets = getClient3();
     if (useCache) {
       const headerRes = await sheets.spreadsheets.values.get({
         spreadsheetId: env.googleSpreadsheetId,
@@ -64397,7 +64521,7 @@ async function listTaskRowsWithHeaders(forceRefresh = false) {
 }
 async function appendTaskRow(values) {
   invalidateTaskCache();
-  const sheets = getClient4();
+  const sheets = getClient3();
   const paddedValues = Array.from({ length: TASK_COLS }, (_, i) => values[i] ?? "");
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64416,7 +64540,7 @@ async function appendTaskRow(values) {
 }
 async function updateTaskRow(id, values) {
   invalidateTaskCache();
-  const sheets = getClient4();
+  const sheets = getClient3();
   const paddedValues = Array.from({ length: TASK_COLS }, (_, i) => values[i] ?? "");
   await sheets.spreadsheets.values.update({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64427,7 +64551,7 @@ async function updateTaskRow(id, values) {
 }
 async function deleteTaskRow(id) {
   invalidateTaskCache();
-  const sheets = getClient4();
+  const sheets = getClient3();
   const sheetId = await getTaskSheetId();
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: env.googleSpreadsheetId,
@@ -64489,19 +64613,31 @@ var COLUMN_INDEX = {
 };
 function cell(row, name) {
   const index = COLUMN_INDEX[name];
-  return index !== void 0 ? row[index] ?? "" : "";
+  if (index === void 0) return "";
+  return row[index] ?? "";
 }
 function nullableString(value) {
-  return value === "" ? null : value;
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
-var VALID_STATUSES = /* @__PURE__ */ new Set(["Upcoming", "Today", "Finished", "Cancelled"]);
 function parseStatus(raw) {
-  if (VALID_STATUSES.has(raw)) {
-    return raw;
-  }
+  const normalized = raw.trim();
+  if (normalized === "Upcoming" || normalized === "\u0642\u0627\u062F\u0645\u0629") return "Upcoming";
+  if (normalized === "Today" || normalized === "\u0627\u0644\u064A\u0648\u0645") return "Today";
+  if (normalized === "Finished" || normalized === "\u0645\u0646\u062A\u0647\u064A\u0629") return "Finished";
+  if (normalized === "Cancelled" || normalized === "\u0645\u0644\u063A\u0627\u0629") return "Cancelled";
   return "Upcoming";
 }
-var ARABIC_DAYS = ["\u0627\u0644\u0623\u062D\u062F", "\u0627\u0644\u0625\u062B\u0646\u064A\u0646", "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062E\u0645\u064A\u0633", "\u0627\u0644\u062C\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062A"];
+var ARABIC_DAYS = [
+  "\u0627\u0644\u0623\u062D\u062F",
+  "\u0627\u0644\u0627\u062B\u0646\u064A\u0646",
+  "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621",
+  "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621",
+  "\u0627\u0644\u062E\u0645\u064A\u0633",
+  "\u0627\u0644\u062C\u0645\u0639\u0629",
+  "\u0627\u0644\u0633\u0628\u062A"
+];
 function computeSessionDayStr(sessionDateHijri, sessionTime) {
   const hearingAt = computeHearingDateTime(sessionDateHijri, sessionTime);
   if (hearingAt) {
@@ -64651,9 +64787,9 @@ function sortSessionsByNearestTime(sessions) {
     return (b.id ?? 0) - (a.id ?? 0);
   });
 }
-async function listSessions(statusFilter) {
-  await ensureSheetReady();
-  const rows = await listRows();
+async function listSessions(statusFilter, userId) {
+  await ensureSheetReady(userId);
+  const rows = await listRows(userId);
   let sessions = rows.map(({ id, values }) => {
     const s = rowToSession(id, values);
     const expectedDay = computeSessionDayStr(s.sessionDateHijri, s.sessionTime);
@@ -64664,7 +64800,7 @@ async function listSessions(statusFilter) {
       updateRowCells(id, {
         [COLUMN_INDEX["Days Remaining"]]: expectedRemaining,
         [COLUMN_INDEX["Session Day"]]: expectedDay
-      }).catch((err) => logger.warn({ err, id }, "Failed to auto-sync row cells"));
+      }, userId).catch((err) => logger.warn({ err, id, userId }, "Failed to auto-sync row cells"));
     }
     return s;
   });
@@ -64673,20 +64809,20 @@ async function listSessions(statusFilter) {
   }
   return sortSessionsByNearestTime(sessions);
 }
-async function getSessionById(id) {
-  const rows = await listRows();
+async function getSessionById(id, userId) {
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
   return match ? rowToSession(match.id, match.values) : null;
 }
-async function createSession(input) {
-  await ensureSheetReady();
+async function createSession(input, userId) {
+  await ensureSheetReady(userId);
   const createdAt = (/* @__PURE__ */ new Date()).toISOString();
   const row = sessionInputToRow(input, createdAt);
-  const id = await appendRow(row);
+  const id = await appendRow(row, userId);
   return rowToSession(id, row);
 }
-async function updateSession(id, patch) {
-  const rows = await listRows();
+async function updateSession(id, patch, userId) {
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
   if (!match) {
     return null;
@@ -64737,133 +64873,115 @@ async function updateSession(id, patch) {
     existingReport
     // 16: التقرير
   ];
-  await updateRow(id, row);
+  await updateRow(id, row, userId);
   return merged;
 }
-async function deleteSession(id) {
-  const existing = await getSessionById(id);
+async function deleteSession(id, userId) {
+  const existing = await getSessionById(id, userId);
   if (!existing) {
     return false;
   }
-  await deleteRow(id);
+  await deleteRow(id, userId);
   return true;
 }
-async function getDashboardStats() {
+async function markReminderSent(id, kind, userId) {
+  const colIndex = kind === "24h" ? COLUMN_INDEX["Reminder24"] : COLUMN_INDEX["Reminder6"];
+  await updateRowCells(id, { [colIndex]: "true" }, userId);
+}
+async function getDashboardStats(userId) {
   const [sessionsRes, poaRes, judgmentRes, taskRes] = await Promise.allSettled([
-    listSessions(),
+    listSessions(void 0, userId),
     listPoaRows(),
     listJudgmentRowsWithHeaders(),
     listTaskRowsWithHeaders()
   ]);
   const sessions = sessionsRes.status === "fulfilled" ? sessionsRes.value : [];
-  const poaRows = poaRes.status === "fulfilled" ? poaRes.value : [];
-  const judgmentResult = judgmentRes.status === "fulfilled" ? judgmentRes.value : { headers: ["\u0631\u0642\u0645 \u0627\u0644\u0642\u0636\u064A\u0629", "\u0627\u0644\u0645\u062D\u0643\u0645\u0629 \u0627\u0644\u0645\u062E\u062A\u0635\u0629", "\u0627\u0644\u0645\u062F\u0639\u064A", "\u0627\u0644\u0645\u062F\u0639\u0649 \u0639\u0644\u064A\u0647", "\u0627\u0644\u0645\u062D\u0627\u0645\u064A \u0627\u0644\u0645\u0643\u0644\u0641", "\u0631\u0642\u0645 \u0627\u0644\u0635\u0643", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062D\u0643\u0645", "\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0643\u0645", "\u0627\u0644\u062D\u0643\u0645", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"], rows: [] };
-  const taskResult = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
-  if (sessionsRes.status === "rejected") {
-    logger.warn({ err: sessionsRes.reason }, "Failed to load sessions for dashboard stats");
-  }
-  if (poaRes.status === "rejected") {
-    logger.warn({ err: poaRes.reason }, "Failed to load POA rows for dashboard stats");
-  }
-  if (judgmentRes.status === "rejected") {
-    logger.warn({ err: judgmentRes.reason }, "Failed to load Judgment rows for dashboard stats");
-  }
-  if (taskRes.status === "rejected") {
-    logger.warn({ err: taskRes.reason }, "Failed to load Task rows for dashboard stats");
-  }
+  const poas = poaRes.status === "fulfilled" ? poaRes.value : [];
+  const judgmentData = judgmentRes.status === "fulfilled" ? judgmentRes.value : { headers: [], rows: [] };
+  const taskData49 = taskRes.status === "fulfilled" ? taskRes.value : { headers: [], rows: [] };
+  const uniqueCases = /* @__PURE__ */ new Set();
   let todayHearings = 0;
   let upcomingHearings = 0;
   let finishedHearings = 0;
-  for (const session of sessions) {
-    const effective = deriveEffectiveStatus(session);
-    if (effective === "Today") todayHearings += 1;
-    else if (effective === "Upcoming") upcomingHearings += 1;
-    else if (effective === "Finished") finishedHearings += 1;
+  for (const s of sessions) {
+    if (s.caseNumber && s.caseNumber.trim()) {
+      uniqueCases.add(s.caseNumber.trim());
+    }
+    const status = deriveEffectiveStatus(s);
+    if (status === "Today") todayHearings++;
+    else if (status === "Upcoming") upcomingHearings++;
+    else if (status === "Finished") finishedHearings++;
   }
-  const judgmentColIdx = judgmentResult.headers.findIndex(
-    (h) => h === "\u0627\u0644\u062D\u0643\u0645" || h === "\u0647\u0644 \u0627\u0644\u062D\u0643\u0645 \u0644\u0635\u0627\u0644\u062D \u0627\u0644\u0639\u0645\u064A\u0644"
-  );
-  let favorableJudgments = 0;
-  let unfavorableJudgments = 0;
-  for (const row of judgmentResult.rows) {
-    const rawVal = judgmentColIdx !== -1 ? row.values[judgmentColIdx] || "" : "";
-    const val = rawVal.trim();
-    if (val === "\u0627\u0628\u062A\u062F\u0627\u0626\u064A" || val === "\u0644\u0627") {
-      unfavorableJudgments += 1;
-    } else {
-      favorableJudgments += 1;
+  for (const j of judgmentData.rows) {
+    const caseNumber = j.values[0];
+    if (caseNumber && caseNumber.trim()) {
+      uniqueCases.add(caseNumber.trim());
     }
   }
-  const TASK_HEADERS = ["\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629", "\u0627\u0644\u0645\u0643\u0644\u0641", "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0633\u0644\u064A\u0645", "\u0639\u062F\u062F \u0627\u0644\u0623\u064A\u0627\u0645 \u0627\u0644\u0645\u062A\u0628\u0642\u064A\u0629", "\u0627\u0644\u062D\u0627\u0644\u0629", "\u0645\u0644\u0627\u062D\u0638\u0627\u062A", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621"];
-  const taskStatusIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "\u0627\u0644\u062D\u0627\u0644\u0629");
-  const taskPriorityIdx = (taskResult.headers.length > 0 ? taskResult.headers : TASK_HEADERS).findIndex((h) => h === "\u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629");
+  let favorableJudgments = 0;
+  let unfavorableJudgments = 0;
+  for (const j of judgmentData.rows) {
+    const ruling = (j.values[8] || "").trim();
+    if (ruling === "\u0644\u0635\u0627\u0644\u062D\u0646\u0627" || ruling.toLowerCase() === "favorable") {
+      favorableJudgments++;
+    } else if (ruling === "\u0636\u062F\u0646\u0627" || ruling.toLowerCase() === "unfavorable") {
+      unfavorableJudgments++;
+    }
+  }
   let inProgressTasks = 0;
   let completedTasks = 0;
   let urgentTasks = 0;
-  for (const row of taskResult.rows) {
-    const status = taskStatusIdx !== -1 ? (row.values[taskStatusIdx] || "").trim() : "";
-    const priority = taskPriorityIdx !== -1 ? (row.values[taskPriorityIdx] || "").trim() : "";
-    if (status === "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630") inProgressTasks += 1;
-    if (status === "\u0645\u0643\u062A\u0645\u0644\u0629") completedTasks += 1;
-    if (priority === "\u0639\u0627\u062C\u0644\u0629") urgentTasks += 1;
+  for (const t of taskData49.rows) {
+    const status = (t.values[4] || "").trim();
+    const priority = (t.values[3] || "").trim();
+    if (status === "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630" || status === "\u062C\u062F\u064A\u062F\u0629" || status === "\u0642\u064A\u062F \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629") {
+      inProgressTasks++;
+    } else if (status === "\u0645\u0643\u062A\u0645\u0644\u0629") {
+      completedTasks++;
+    }
+    if (priority === "\u0639\u0627\u062C\u0644\u0629" || priority === "\u0639\u0627\u0644\u064A\u0629") {
+      urgentTasks++;
+    }
   }
   return {
-    totalCases: sessions.length,
+    totalCases: uniqueCases.size,
     todayHearings,
     upcomingHearings,
     finishedHearings,
-    totalPoas: poaRows.length,
+    totalPoas: poas.length,
     favorableJudgments,
     unfavorableJudgments,
-    totalTasks: taskResult.rows.length,
+    totalTasks: taskData49.rows.length,
     inProgressTasks,
     completedTasks,
     urgentTasks
   };
 }
-async function markReminderSent(id, kind) {
-  const columnName = kind === "24h" ? "Reminder24" : "Reminder6";
-  await updateRowCells(id, { [COLUMN_INDEX[columnName]]: "true" });
-}
-async function getSessionReport(id) {
-  await ensureSheetReady();
-  const rows = await listRows();
+async function getSessionReport(id, userId) {
+  const rows = await listRows(userId);
   const match = rows.find((r) => r.id === id);
-  if (!match) return null;
-  const raw = match.values[COLUMN_INDEX["Report"]] ?? "";
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
+  if (!match) {
     return null;
   }
+  const session = rowToSession(match.id, match.values);
+  const rawReport = match.values[COLUMN_INDEX["Report"]];
+  const report = rawReport && rawReport.trim().length > 0 ? rawReport.trim() : null;
+  return { session, report };
 }
-async function upsertSessionReport(id, input) {
-  await ensureSheetReady();
-  const existing = await getSessionById(id);
-  if (!existing) return null;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const current = await getSessionReport(id);
-  const updated = {
-    reportNumber: input.reportNumber ?? current?.reportNumber ?? "01",
-    lawyerName: input.lawyerName ?? current?.lawyerName ?? "",
-    summary: input.summary ?? current?.summary ?? "",
-    courtDecision: input.courtDecision ?? current?.courtDecision ?? "",
-    nextSessionDate: input.nextSessionDate ?? current?.nextSessionDate ?? "",
-    nextSessionTime: input.nextSessionTime ?? current?.nextSessionTime ?? "",
-    ourActionRequired: input.ourActionRequired ?? current?.ourActionRequired ?? "",
-    clientActionRequired: input.clientActionRequired ?? current?.clientActionRequired ?? "",
-    reportDate: input.reportDate ?? current?.reportDate ?? now.split("T")[0],
-    createdAt: current?.createdAt ?? now,
-    updatedAt: now
-  };
-  await updateRowCells(id, { [COLUMN_INDEX["Report"]]: JSON.stringify(updated) });
-  return updated;
+async function saveSessionReport(id, report, userId) {
+  const rows = await listRows(userId);
+  const match = rows.find((r) => r.id === id);
+  if (!match) {
+    return null;
+  }
+  await updateRowCells(id, { [COLUMN_INDEX["Report"]]: report }, userId);
+  const session = rowToSession(match.id, match.values);
+  return { session, report };
 }
 
 // src/routes/dashboard.ts
 var router3 = (0, import_express3.Router)();
-router3.get("/dashboard/stats", attachAuthUser, requireAuth, async (_req, res) => {
+router3.get("/dashboard/stats", attachAuthUser, requireAuth, async (req, res) => {
   if (!isGoogleSheetsConfigured()) {
     res.status(500).json({
       error: "Google Sheets is not configured yet. Set GOOGLE_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON."
@@ -64871,7 +64989,8 @@ router3.get("/dashboard/stats", attachAuthUser, requireAuth, async (_req, res) =
     return;
   }
   try {
-    const stats = await getDashboardStats();
+    const userId = req.authUser?.userId;
+    const stats = await getDashboardStats(userId);
     const data = GetDashboardStatsResponse.parse(stats);
     res.json(data);
   } catch (err) {
@@ -81156,7 +81275,8 @@ router5.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const sessions = await listSessions(parseResult.data.status);
+    const userId = req.authUser?.userId;
+    const sessions = await listSessions(parseResult.data.status, userId);
     const data = ListSessionsResponse.parse(sessions);
     res.json(data);
   } catch (err) {
@@ -81177,7 +81297,8 @@ router5.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const session = await createSession(parseResult.data);
+    const userId = req.authUser?.userId;
+    const session = await createSession(parseResult.data, userId);
     const data = CreateSessionResponse.parse(session);
     res.status(201).json(data);
   } catch (err) {
@@ -81196,7 +81317,8 @@ router5.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const session = await getSessionById(id);
+    const userId = req.authUser?.userId;
+    const session = await getSessionById(id, userId);
     if (!session) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -81224,7 +81346,8 @@ router5.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => 
     return;
   }
   try {
-    const session = await updateSession(id, parseResult.data);
+    const userId = req.authUser?.userId;
+    const session = await updateSession(id, parseResult.data, userId);
     if (!session) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -81247,7 +81370,8 @@ router5.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) =>
     return;
   }
   try {
-    const deleted = await deleteSession(id);
+    const userId = req.authUser?.userId;
+    const deleted = await deleteSession(id, userId);
     if (!deleted) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -81265,7 +81389,8 @@ router5.post("/sessions/:id/send-whatsapp", attachAuthUser, requireAuth, async (
     return;
   }
   try {
-    const session = await getSessionById(id);
+    const userId = req.authUser?.userId;
+    const session = await getSessionById(id, userId);
     if (!session) {
       res.status(404).json({ error: "\u0627\u0644\u062C\u0644\u0633\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629." });
       return;
@@ -81436,7 +81561,8 @@ router7.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res
     return;
   }
   try {
-    const report = await getSessionReport(id);
+    const userId = req.authUser?.userId;
+    const report = await getSessionReport(id, userId);
     if (!report) {
       res.status(200).json(null);
       return;
@@ -81459,7 +81585,9 @@ router7.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res
   }
   try {
     logger.info({ id, body: req.body }, "Saving session report...");
-    const updated = await upsertSessionReport(id, req.body ?? {});
+    const userId = req.authUser?.userId;
+    const reportText = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const updated = await saveSessionReport(id, reportText, userId);
     if (!updated) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -82200,7 +82328,16 @@ router12.get("/users", async (_req, res) => {
 });
 router12.post("/users", requireAdmin, async (req, res) => {
   try {
-    const { username, email, password, role, display_name } = req.body;
+    const {
+      username,
+      email,
+      password,
+      role,
+      display_name,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name
+    } = req.body;
     if (!username || !password) {
       res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0637\u0644\u0648\u0628\u0627\u0646." });
       return;
@@ -82210,7 +82347,10 @@ router12.post("/users", requireAdmin, async (req, res) => {
       email,
       password,
       role: role === "admin" ? "admin" : "staff",
-      display_name
+      display_name,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name
     });
     res.status(201).json(newUser);
   } catch (err) {
@@ -82221,12 +82361,23 @@ router12.post("/users", requireAdmin, async (req, res) => {
 router12.patch("/users/:id", requireAdmin, async (req, res) => {
   try {
     const id = String(req.params.id);
-    const { password, role, display_name, email } = req.body;
+    const {
+      password,
+      role,
+      display_name,
+      email,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name
+    } = req.body;
     const updatedUser = await updateSupabaseUser(id, {
       password,
       role,
       display_name,
-      email
+      email,
+      google_service_account_json,
+      google_spreadsheet_id,
+      google_sheet_name
     });
     res.json(updatedUser);
   } catch (err) {

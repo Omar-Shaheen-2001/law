@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
-import { getSessionReport, upsertSessionReport } from "../services/session.service";
+import { getSessionReport, saveSessionReport } from "../services/session.service";
 import { isGoogleSheetsConfigured } from "../config/env";
 import { logger } from "../lib/logger";
 
@@ -18,7 +18,8 @@ router.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
     return;
   }
   try {
-    const report = await getSessionReport(id);
+    const userId = req.authUser?.userId;
+    const report = await getSessionReport(id, userId);
     if (!report) {
       // Return 200 with null instead of 404 so the frontend can show an empty form
       res.status(200).json(null);
@@ -44,7 +45,9 @@ router.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
   }
   try {
     logger.info({ id, body: req.body }, "Saving session report...");
-    const updated = await upsertSessionReport(id, req.body ?? {});
+    const userId = req.authUser?.userId;
+    const reportText = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const updated = await saveSessionReport(id, reportText, userId);
     if (!updated) {
       res.status(404).json({ error: "Session not found." });
       return;

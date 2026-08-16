@@ -42,7 +42,8 @@ router.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const sessions = await listSessions(parseResult.data.status);
+    const userId = req.authUser?.userId;
+    const sessions = await listSessions(parseResult.data.status, userId);
     const data = ListSessionsResponse.parse(sessions);
     res.json(data);
   } catch (err: any) {
@@ -66,7 +67,8 @@ router.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const session = await createSession(parseResult.data);
+    const userId = req.authUser?.userId;
+    const session = await createSession(parseResult.data, userId);
     const data = CreateSessionResponse.parse(session);
     res.status(201).json(data);
   } catch (err) {
@@ -86,7 +88,8 @@ router.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const session = await getSessionById(id);
+    const userId = req.authUser?.userId;
+    const session = await getSessionById(id, userId);
     if (!session) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -115,7 +118,8 @@ router.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     return;
   }
   try {
-    const session = await updateSession(id, parseResult.data);
+    const userId = req.authUser?.userId;
+    const session = await updateSession(id, parseResult.data, userId);
     if (!session) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -139,7 +143,8 @@ router.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => 
     return;
   }
   try {
-    const deleted = await deleteSession(id);
+    const userId = req.authUser?.userId;
+    const deleted = await deleteSession(id, userId);
     if (!deleted) {
       res.status(404).json({ error: "Session not found." });
       return;
@@ -162,7 +167,8 @@ router.post("/sessions/:id/send-whatsapp", attachAuthUser, requireAuth, async (r
     return;
   }
   try {
-    const session = await getSessionById(id);
+    const userId = req.authUser?.userId;
+    const session = await getSessionById(id, userId);
     if (!session) {
       res.status(404).json({ error: "الجلسة غير موجودة." });
       return;
