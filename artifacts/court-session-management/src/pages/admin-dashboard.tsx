@@ -20,11 +20,12 @@ import {
   LogOut,
   ExternalLink,
   Settings,
+  Save,
+  Eye,
+  EyeOff,
   Server,
   Activity,
-  Bot,
-  MessageSquare,
-  Sheet,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,10 @@ export default function AdminDashboardPage() {
   const { data: currentUser } = useGetCurrentUser();
   const logoutMutation = useLogout();
 
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<'users' | 'supabase'>('users');
+
+  // Loading states
   const [loading, setLoading] = useState(true);
   const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -84,7 +89,7 @@ export default function AdminDashboardPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
 
-  // Form states
+  // Form states for Users
   const [newUser, setNewUser] = useState({
     username: '',
     display_name: '',
@@ -101,6 +106,15 @@ export default function AdminDashboardPage() {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+
+  // Supabase Settings form state
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [supabaseTableName, setSupabaseTableName] = useState('app_users');
+  const [supabaseKeyIsSet, setSupabaseKeyIsSet] = useState(false);
+  const [maskedSupabaseKey, setMaskedSupabaseKey] = useState('');
+  const [showSupabaseKey, setShowSupabaseKey] = useState(false);
+  const [savingSupabase, setSavingSupabase] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -123,8 +137,24 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchSupabaseSettings = async () => {
+    try {
+      const res = await fetch('/api/settings', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseUrl(data.supabaseUrl || '');
+        setSupabaseTableName(data.supabaseTableName || 'app_users');
+        setSupabaseKeyIsSet(data.supabaseKeyIsSet);
+        setMaskedSupabaseKey(data.supabaseKey || '');
+      }
+    } catch {
+      // Ignore if fetch settings fails
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchSupabaseSettings();
   }, []);
 
   const handleAdminLogout = () => {
@@ -142,8 +172,56 @@ export default function AdminDashboardPage() {
   const handleCopySql = () => {
     navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
     setCopiedSql(true);
-    toast({ title: 'تم النسخ', description: 'تم نسخ سكربت SQL لإنشاء الجدول في Supabase.' });
+    toast({ title: 'تم النسخ ✅', description: 'تم نسخ سكربت SQL لإنشاء الجدول في Supabase.' });
     setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+  const handleSaveSupabaseSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSupabase(true);
+    try {
+      const payload: Record<string, string> = {
+        supabaseUrl: supabaseUrl.trim(),
+        supabaseTableName: supabaseTableName.trim() || 'app_users',
+      };
+      if (supabaseKey.trim()) {
+        payload.supabaseKey = supabaseKey.trim();
+      }
+
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل حفظ إعدادات Supabase');
+      }
+
+      const updated = await res.json();
+      setSupabaseKeyIsSet(updated.supabaseKeyIsSet);
+      setMaskedSupabaseKey(updated.supabaseKey || '');
+      setSupabaseKey('');
+
+      toast({
+        title: 'تم الحفظ بنجاح ✅',
+        description: 'تم تحديث بيانات الاتصال بـ Supabase.',
+      });
+
+      // Refresh users list and settings status
+      await fetchUsers();
+      await fetchSupabaseSettings();
+    } catch (err: any) {
+      toast({
+        title: 'خطأ في الحفظ',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSupabase(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -296,14 +374,14 @@ export default function AdminDashboardPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-extrabold text-base tracking-tight text-foreground">
-                  بوابة الإدارة المركزية
+                  بوابة المشرف العام
                 </h1>
                 <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px]">
-                  Admin Portal
+                  Admin Gateway
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                المشرف: <strong className="text-foreground">{currentUser?.username || 'مدير النظام'}</strong>
+                المشرف: <strong className="text-foreground">{currentUser?.username || '407171248'}</strong>
               </p>
             </div>
           </div>
@@ -317,17 +395,6 @@ export default function AdminDashboardPage() {
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>دخول نظام الجلسات</span>
-              </Button>
-            </Link>
-
-            <Link href="/settings">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <Settings className="w-3.5 h-3.5" />
-                <span>إعدادات النظام</span>
               </Button>
             </Link>
 
@@ -355,7 +422,7 @@ export default function AdminDashboardPage() {
               <Users className="w-4 h-4 text-primary" />
             </div>
             <p className="text-2xl font-extrabold text-foreground">{users.length}</p>
-            <p className="text-[11px] text-muted-foreground">مستخدم مسجل في النظام</p>
+            <p className="text-[11px] text-muted-foreground">مستخدم مسجل في المنظومة</p>
           </div>
 
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 shadow-xs space-y-2">
@@ -364,7 +431,7 @@ export default function AdminDashboardPage() {
               <ShieldCheck className="w-4 h-4" />
             </div>
             <p className="text-2xl font-extrabold text-foreground">{adminCount}</p>
-            <p className="text-[11px] text-muted-foreground">لديهم كامل صلاحيات الإدارة</p>
+            <p className="text-[11px] text-muted-foreground">صلاحيات إدارة كاملة</p>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
@@ -392,338 +459,470 @@ export default function AdminDashboardPage() {
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {isSupabaseConfigured ? 'المزامنة السحابية نشطة' : 'يرجى ربط Supabase'}
+              {isSupabaseConfigured ? 'المزامنة السحابية نشطة' : 'يمكنك ربط Supabase أدناه'}
             </p>
           </div>
         </div>
 
-        {/* Supabase Status Alert if not configured */}
-        {!isSupabaseConfigured && (
-          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 space-y-3">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                  Supabase غير مربوط حالياً بلوحة الإدارة
-                </h3>
-                <p className="text-xs text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-                  لتمكين إضافة مستخدمين دائمين وتخزينهم في قاعدة بيانات سحابية آمنة، افتح صفحة الإعدادات وضع بيانات Supabase
-                  URL والـ Service Role Key.
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 border-b border-border pb-1">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'users'
+                ? 'border-amber-500 text-amber-500 bg-amber-500/5'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>إدارة حسابات المستخدمين والموظفين</span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              {users.length}
+            </Badge>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('supabase')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all border-b-2 ${
+              activeTab === 'supabase'
+                ? 'border-sky-500 text-sky-500 bg-sky-500/5'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>إعدادات قاعدة بيانات المستخدمين (Supabase)</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-500'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Tab 1: User Management */}
+        {activeTab === 'users' && (
+          <div className="space-y-4 fade-in-up">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  قائمة المستخدمين المصرح لهم
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  إضافة وتعديل وحذف حسابات الموظفين مع إمكانية إعادة تعيين كلمات المرور
                 </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchUsers}
+                  disabled={loading}
+                  className="gap-2 text-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>تحديث</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => setIsAddOpen(true)}
+                  className="gap-2 text-xs text-white"
+                  style={{ background: 'linear-gradient(135deg, #B88A3B 0%, #966c25 100%)' }}
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>إضافة مستخدم جديد</span>
+                </Button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-amber-500/20">
-              <Link href="/settings">
-                <Button size="sm" variant="default" className="text-xs bg-amber-600 hover:bg-amber-700 text-white gap-2">
-                  <Database className="w-3.5 h-3.5" />
-                  الذهاب لصفحة الإعدادات للربط
-                </Button>
-              </Link>
-              <Button size="sm" variant="outline" onClick={handleCopySql} className="text-xs border-amber-500/40 text-amber-900 dark:text-amber-200 gap-2">
-                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedSql ? 'تم نسخ سكربت SQL' : 'نسخ سكربت الجدول (SQL)'}
-              </Button>
+            {/* Search Input */}
+            <div className="relative max-w-md">
+              <Search className="w-4 h-4 absolute start-3 inset-y-0 my-auto text-muted-foreground" />
+              <Input
+                placeholder="بحث بالاسم أو البريد أو اسم المستخدم..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="ps-9 text-sm h-9"
+              />
+            </div>
+
+            {/* Users Table */}
+            <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-xs sm:text-sm">
+                  <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold">
+                    <tr>
+                      <th className="py-3 px-4 text-start">المستخدم</th>
+                      <th className="py-3 px-4 text-start">الاسم الظاهر</th>
+                      <th className="py-3 px-4 text-start">البريد الإلكتروني</th>
+                      <th className="py-3 px-4 text-start">الصلاحية</th>
+                      <th className="py-3 px-4 text-start">تاريخ الإنشاء</th>
+                      <th className="py-3 px-4 text-end">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                            <span className="text-xs">جارٍ جلب الحسابات...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                          <div className="flex flex-col items-center gap-2">
+                            <Users className="w-8 h-8 opacity-30" />
+                            <p className="text-sm font-medium">لا توجد حسابات مطابقة</p>
+                            <p className="text-xs">يمكنك إضافة مستخدم جديد بالضغط على زر الإضافة أعلاه.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((u) => {
+                        const isCurrent = currentUser?.username === u.username;
+                        return (
+                          <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-foreground">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-sans font-bold text-xs shrink-0">
+                                  {u.username.slice(0, 2).toUpperCase()}
+                                </div>
+                                <span>{u.username}</span>
+                                {isCurrent && (
+                                  <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/30">
+                                    حسابك الحالي
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground">
+                              {u.display_name || '—'}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-xs text-muted-foreground">
+                              {u.email || '—'}
+                            </td>
+                            <td className="py-3 px-4">
+                              {u.role === 'admin' ? (
+                                <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  <span>مشرف (Admin)</span>
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="gap-1 text-xs">
+                                  <User className="w-3 h-3 text-sky-500" />
+                                  <span>موظف (Staff)</span>
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground text-xs">
+                              {u.created_at
+                                ? new Date(u.created_at).toLocaleDateString('ar-SA', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })
+                                : '—'}
+                            </td>
+                            <td className="py-3 px-4 text-end">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="تغيير كلمة المرور"
+                                  onClick={() => {
+                                    setSelectedUser(u);
+                                    setIsPasswordModalOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                >
+                                  <Key className="w-4 h-4" />
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="تعديل المستخدم"
+                                  onClick={() => {
+                                    setSelectedUser(u);
+                                    setEditUserData({
+                                      display_name: u.display_name || '',
+                                      email: u.email || '',
+                                      role: u.role,
+                                    });
+                                    setIsEditModalOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="حذف المستخدم"
+                                  disabled={isCurrent}
+                                  onClick={() => {
+                                    setSelectedUser(u);
+                                    setIsDeleteModalOpen(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 disabled:opacity-30"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {/* User Management Section */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                إدارة حسابات الموظفين والمستخدمين
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                إضافة حسابات جديدة للموظفين والمحامين للوصول لنظام الجلسات مع إمكانية حذف وتعديل الحسابات
-              </p>
-            </div>
+        {/* Tab 2: Supabase Database Configuration */}
+        {activeTab === 'supabase' && (
+          <div className="space-y-6 fade-in-up">
+            {/* Supabase Settings Card */}
+            <div className="rounded-2xl border border-sky-500/30 bg-card overflow-hidden shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-5 border-b border-border bg-sky-500/10 gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                    <Database className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-sky-950 dark:text-sky-100">
+                      إعدادات وربط قاعدة بيانات المستخدمين (Supabase)
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      ربط الحسابات السحابية لحفظ وإدارة مستخدمي وموظفي المنظومة بأمان
+                    </p>
+                  </div>
+                </div>
 
-            <div className="flex items-center gap-2.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchUsers}
-                disabled={loading}
-                className="gap-2 text-xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                تحديث
-              </Button>
-
-              <Button
-                onClick={() => setIsAddOpen(true)}
-                size="sm"
-                disabled={!isSupabaseConfigured}
-                className="gap-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-              >
-                <UserPlus className="w-4 h-4" />
-                إضافة مستخدم جديد
-              </Button>
-            </div>
-          </div>
-
-          {/* Search bar */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative w-full max-w-sm">
-              <Search className="w-4 h-4 absolute inset-y-0 start-3 my-auto text-muted-foreground" />
-              <Input
-                placeholder="بحث بالاسم أو اسم المستخدم أو البريد..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="ps-9 h-9 text-sm"
-              />
-            </div>
-            <div className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
-              النتائج: <span className="text-foreground font-bold">{filteredUsers.length}</span>
-            </div>
-          </div>
-
-          {/* Users Table */}
-          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
-            {loading ? (
-              <div className="p-12 text-center text-muted-foreground space-y-3">
-                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-primary" />
-                <p className="text-sm">جارٍ تحميل قائمة المستخدمين...</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopySql}
+                  className="gap-2 text-xs border-sky-500/40 text-sky-700 dark:text-sky-300 hover:bg-sky-500/10 self-start sm:self-auto"
+                >
+                  {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedSql ? 'تم نسخ سكربت SQL' : 'نسخ سكربت الجدول (SQL)'}
+                </Button>
               </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="p-12 text-center space-y-3 text-muted-foreground">
-                <Users className="w-10 h-10 mx-auto text-muted-foreground/40" />
-                <p className="text-sm font-semibold">لا يوجد مستخدمون مسجلون مطابقون للبحث</p>
-                {searchQuery && (
-                  <Button size="sm" variant="ghost" onClick={() => setSearchQuery('')}>
-                    إلغاء التصفية
+
+              <form onSubmit={handleSaveSupabaseSettings} className="p-6 space-y-5">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    رابط مشروع Supabase (Project URL)
+                  </Label>
+                  <Input
+                    placeholder="https://xyzprojectid.supabase.co"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    className="font-mono text-sm h-10"
+                    dir="ltr"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    الرابط الخاص بمشروع Supabase من لوحة التحكم: Settings ← API.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    مفتاح الخدمة السحابية (Supabase Service Role Key / Secret)
+                    {supabaseKeyIsSet && (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold normal-case tracking-normal text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                        ✔ محدَّد
+                      </span>
+                    )}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type={showSupabaseKey ? 'text' : 'password'}
+                      placeholder={
+                        supabaseKeyIsSet
+                          ? `القيمة الحالية: ${maskedSupabaseKey} — اتركه فارغاً للإبقاء عليها`
+                          : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                      }
+                      value={supabaseKey}
+                      onChange={(e) => setSupabaseKey(e.target.value)}
+                      className="font-mono text-sm h-10 pe-10"
+                      dir="ltr"
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 end-0 px-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setShowSupabaseKey((v) => !v)}
+                      tabIndex={-1}
+                    >
+                      {showSupabaseKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    مفتاح Service Role Key لإدارة المستخدمين والتسجيل الآمن (Project Settings ← API).
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    اسم جدول المستخدمين (Table Name)
+                  </Label>
+                  <Input
+                    placeholder="app_users"
+                    value={supabaseTableName}
+                    onChange={(e) => setSupabaseTableName(e.target.value)}
+                    className="font-mono text-sm h-10"
+                    dir="ltr"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    الاسم الافتراضي: <code>app_users</code>
+                  </p>
+                </div>
+
+                {/* SQL Script Box */}
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs font-bold flex items-center justify-between text-muted-foreground">
+                    <span>سكربت إنشاء الجدول في Supabase (SQL Script):</span>
+                    <span className="text-[11px] font-normal text-muted-foreground">
+                      انسخ والصق في SQL Editor داخل Supabase
+                    </span>
+                  </Label>
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 font-mono text-xs overflow-x-auto relative">
+                    <pre className="text-slate-800 dark:text-slate-200" dir="ltr">
+                      {SUPABASE_SQL_SCRIPT}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                  <Button
+                    type="submit"
+                    disabled={savingSupabase}
+                    className="gap-2 px-6 h-10 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md"
+                  >
+                    <Save className="w-4 h-4" />
+                    {savingSupabase ? 'جارٍ الحفظ والتحقق...' : 'حفظ إعدادات Supabase'}
                   </Button>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-start text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40 text-muted-foreground text-xs uppercase font-semibold">
-                      <th className="py-3.5 px-4 text-start">المستخدم</th>
-                      <th className="py-3.5 px-4 text-start">البريد الإلكتروني</th>
-                      <th className="py-3.5 px-4 text-start">الصلاحية / الدور</th>
-                      <th className="py-3.5 px-4 text-start">تاريخ التسجيل</th>
-                      <th className="py-3.5 px-4 text-center">التحكم والإجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredUsers.map((user) => {
-                      const isAdmin = user.role === 'admin';
-                      return (
-                        <tr key={user.id} className="hover:bg-muted/30 transition-colors">
-                          {/* User details */}
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                                  isAdmin
-                                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                    : 'bg-primary/20 text-primary border border-primary/30'
-                                }`}
-                              >
-                                {isAdmin ? <Shield className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                              </div>
-                              <div>
-                                <p className="font-bold text-foreground text-sm">
-                                  {user.display_name || user.username}
-                                </p>
-                                <p className="text-xs text-muted-foreground font-mono" dir="ltr">
-                                  @{user.username}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Email */}
-                          <td className="py-3.5 px-4 font-mono text-xs text-muted-foreground" dir="ltr">
-                            {user.email || '—'}
-                          </td>
-
-                          {/* Role Badge */}
-                          <td className="py-3.5 px-4">
-                            {isAdmin ? (
-                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20 gap-1 text-xs">
-                                <ShieldCheck className="w-3 h-3" />
-                                مدير نظام (Admin)
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">
-                                موظف (Staff)
-                              </Badge>
-                            )}
-                          </td>
-
-                          {/* Created date */}
-                          <td className="py-3.5 px-4 text-xs text-muted-foreground">
-                            {user.created_at
-                              ? new Date(user.created_at).toLocaleDateString('ar-SA', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric',
-                                })
-                              : '—'}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {/* Change Password */}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                title="تغيير كلمة المرور"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setNewPassword('');
-                                  setIsPasswordModalOpen(true);
-                                }}
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                              >
-                                <Key className="w-4 h-4" />
-                              </Button>
-
-                              {/* Edit User */}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                title="تعديل البيانات والصلاحية"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setEditUserData({
-                                    display_name: user.display_name || '',
-                                    email: user.email || '',
-                                    role: user.role,
-                                  });
-                                  setIsEditModalOpen(true);
-                                }}
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-
-                              {/* Delete User */}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                title="حذف المستخدم"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setIsDeleteModalOpen(true);
-                                }}
-                                className="h-8 w-8 p-0 text-red-500/70 hover:text-red-600 hover:bg-red-500/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
-      {/* 1. Modal: Add New User */}
+      {/* Modal: Add User */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5" dir="rtl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-primary" />
-                إضافة مستخدم / موظف جديد
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-primary" />
+                <span>إضافة مستخدم جديد</span>
               </h3>
               <button
                 onClick={() => setIsAddOpen(false)}
-                className="text-muted-foreground hover:text-foreground text-sm font-bold"
+                className="text-muted-foreground hover:text-foreground text-sm font-bold px-2 py-1 rounded-md"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div className="space-y-1.5">
+            <form onSubmit={handleCreateUser} className="space-y-3.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">اسم المستخدم (Username) *</Label>
-                <div className="relative">
-                  <User className="w-4 h-4 absolute start-3 inset-y-0 my-auto text-muted-foreground" />
-                  <Input
-                    required
-                    placeholder="e.g. lawyer_ahmed"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                    className="ps-9 font-mono text-sm"
-                    dir="ltr"
-                  />
-                </div>
+                <Input
+                  required
+                  placeholder="e.g. lawyer1 أو 5128"
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  className="font-mono text-sm"
+                  dir="ltr"
+                />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">الاسم الظاهر للموظف</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">الاسم الظاهر</Label>
                 <Input
-                  placeholder="e.g. الأستاذ أحمد المحمد"
+                  placeholder="e.g. أ. عمر شاهين"
                   value={newUser.display_name}
                   onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })}
                   className="text-sm"
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">البريد الإلكتروني (اختياري)</Label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute start-3 inset-y-0 my-auto text-muted-foreground" />
-                  <Input
-                    type="email"
-                    placeholder="ahmed@example.com"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    className="ps-9 font-mono text-sm"
-                    dir="ltr"
-                  />
-                </div>
+                <Input
+                  type="email"
+                  placeholder="lawyer@office.com"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  className="font-mono text-sm"
+                  dir="ltr"
+                />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">كلمة المرور *</Label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute start-3 inset-y-0 my-auto text-muted-foreground" />
-                  <Input
-                    required
-                    type="password"
-                    placeholder="••••••••"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    className="ps-9 font-mono text-sm"
-                    dir="ltr"
-                  />
+                <Input
+                  required
+                  type="password"
+                  placeholder="••••••••"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="font-mono text-sm"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setNewUser({ ...newUser, role: 'staff' })}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      newUser.role === 'staff'
+                        ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>موظف (Staff)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewUser({ ...newUser, role: 'admin' })}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      newUser.role === 'admin'
+                        ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>مشرف (Admin)</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">الدور والصلاحية</Label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as 'admin' | 'staff' })}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="staff">موظف (Staff) — دخول نظام الجلسات فقط</option>
-                  <option value="admin">مشرف عام (Admin) — صلاحية كاملة للدخول لبوابة الإدارة وإدارة المستخدمين</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setIsAddOpen(false)}
-                  disabled={actionLoading}
+                  className="text-xs"
                 >
                   إلغاء
                 </Button>
@@ -731,9 +930,10 @@ export default function AdminDashboardPage() {
                   type="submit"
                   size="sm"
                   disabled={actionLoading}
-                  className="bg-primary text-primary-foreground font-semibold"
+                  className="text-xs text-white"
+                  style={{ background: 'linear-gradient(135deg, #B88A3B 0%, #966c25 100%)' }}
                 >
-                  {actionLoading ? 'جارٍ الإنشاء...' : 'حفظ وإنشاء المستخدم'}
+                  {actionLoading ? 'جارٍ الحفظ...' : 'حفظ وإضافة'}
                 </Button>
               </div>
             </form>
@@ -741,27 +941,33 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 2. Modal: Change Password */}
+      {/* Modal: Change Password */}
       {isPasswordModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4" dir="rtl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
-                <Key className="w-4 h-4 text-primary" />
-                تغيير كلمة المرور: @{selectedUser.username}
+                <Key className="w-4 h-4 text-amber-500" />
+                <span>تغيير كلمة المرور للمستخدم ({selectedUser.username})</span>
               </h3>
-              <button onClick={() => setIsPasswordModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => {
+                  setIsPasswordModalOpen(false);
+                  setSelectedUser(null);
+                }}
+                className="text-muted-foreground hover:text-foreground text-sm font-bold px-2 py-1 rounded-md"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">كلمة المرور الجديدة</Label>
+            <form onSubmit={handleUpdatePassword} className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">كلمة المرور الجديدة *</Label>
                 <Input
                   required
                   type="password"
-                  placeholder="أدخل كلمة المرور الجديدة"
+                  placeholder="أدخل كلمة المرور الجديدة..."
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="font-mono text-sm"
@@ -770,12 +976,26 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsPasswordModalOpen(false)}>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsPasswordModalOpen(false);
+                    setSelectedUser(null);
+                  }}
+                  className="text-xs"
+                >
                   إلغاء
                 </Button>
-                <Button type="submit" size="sm" disabled={actionLoading} className="bg-primary text-primary-foreground">
-                  {actionLoading ? 'جارٍ الحفظ...' : 'تحديث كلمة المرور'}
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={actionLoading}
+                  className="text-xs text-white bg-amber-600 hover:bg-amber-700"
+                >
+                  {actionLoading ? 'جارٍ التحديث...' : 'تحديث كلمة المرور'}
                 </Button>
               </div>
             </form>
@@ -783,34 +1003,42 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 3. Modal: Edit User */}
+      {/* Modal: Edit User */}
       {isEditModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4" dir="rtl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-primary" />
-                تعديل بيانات المستخدم: @{selectedUser.username}
+                <span>تعديل بيانات المستخدم ({selectedUser.username})</span>
               </h3>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setSelectedUser(null);
+                }}
+                className="text-muted-foreground hover:text-foreground text-sm font-bold px-2 py-1 rounded-md"
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleUpdateUser} className="space-y-4">
-              <div className="space-y-1.5">
+            <form onSubmit={handleUpdateUser} className="space-y-3.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">الاسم الظاهر</Label>
                 <Input
+                  placeholder="e.g. أ. عمر شاهين"
                   value={editUserData.display_name}
                   onChange={(e) => setEditUserData({ ...editUserData, display_name: e.target.value })}
                   className="text-sm"
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs font-semibold">البريد الإلكتروني</Label>
                 <Input
                   type="email"
+                  placeholder="lawyer@office.com"
                   value={editUserData.email}
                   onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })}
                   className="font-mono text-sm"
@@ -818,23 +1046,56 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">الدور والصلاحية</Label>
-                <select
-                  value={editUserData.role}
-                  onChange={(e) => setEditUserData({ ...editUserData, role: e.target.value as 'admin' | 'staff' })}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-                >
-                  <option value="staff">موظف (Staff)</option>
-                  <option value="admin">مشرف عام (Admin)</option>
-                </select>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">الصلاحية (Role)</Label>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditUserData({ ...editUserData, role: 'staff' })}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      editUserData.role === 'staff'
+                        ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>موظف (Staff)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditUserData({ ...editUserData, role: 'admin' })}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      editUserData.role === 'admin'
+                        ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>مشرف (Admin)</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsEditModalOpen(false)}>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setSelectedUser(null);
+                  }}
+                  className="text-xs"
+                >
                   إلغاء
                 </Button>
-                <Button type="submit" size="sm" disabled={actionLoading} className="bg-primary text-primary-foreground">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={actionLoading}
+                  className="text-xs text-white bg-primary hover:bg-primary/90"
+                >
                   {actionLoading ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}
                 </Button>
               </div>
@@ -843,32 +1104,46 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* 4. Modal: Delete Confirmation */}
+      {/* Modal: Delete Confirmation */}
       {isDeleteModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-card border border-red-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4" dir="rtl">
-            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-              <Trash2 className="w-5 h-5" />
-              <h3 className="text-base font-bold">تأكيد حذف المستخدم</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">تأكيد حذف المستخدم</h3>
+                <p className="text-xs text-muted-foreground">هذا الإجراء نهائي ولا يمكن التراجع عنه.</p>
+              </div>
             </div>
 
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              هل أنت متأكد من رغبتك في حذف حساب المستخدم{' '}
-              <strong className="text-foreground">@{selectedUser.username}</strong> ({selectedUser.display_name || 'بدون اسم'})؟ لن يتمكن من تسجيل الدخول للنظام بعد الآن.
+            <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded-xl">
+              هل أنت متأكد من رغبتك في حذف حساب المستخدم <strong className="text-foreground">({selectedUser.username})</strong>؟
+              لن يتمكن من الدخول للنظام بعد الحذف.
             </p>
 
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsDeleteModalOpen(false)}>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setSelectedUser(null);
+                }}
+                className="text-xs"
+              >
                 إلغاء
               </Button>
               <Button
                 type="button"
                 size="sm"
-                onClick={handleDeleteUser}
                 disabled={actionLoading}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                onClick={handleDeleteUser}
+                className="text-xs bg-red-600 hover:bg-red-700 text-white"
               >
-                {actionLoading ? 'جارٍ الحذف...' : 'تأكيد الحذف'}
+                {actionLoading ? 'جارٍ الحذف...' : 'نعم، احذف الحساب'}
               </Button>
             </div>
           </div>
