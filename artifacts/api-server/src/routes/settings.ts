@@ -2,17 +2,49 @@ import { Router, type IRouter } from "express";
 import { getSettings, saveSettings, type AppSettings } from "../config/settings-store";
 import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
 import { logger } from "../lib/logger";
-import { notify } from "../services/reminder/reminder.service";
 import { WhatsappReminderChannel } from "../services/reminder/channels/whatsappChannel";
 
 const router: IRouter = Router();
 
-type SettingsPatch = Partial<Pick<AppSettings, "aiApiKey" | "aiModel" | "aiBaseUrl" | "googleSpreadsheetId" | "googleSheetName" | "hfApiToken" | "hfModel" | "whatsappNumber" | "whatsappApiUrl" | "whatsappToken" | "whatsappInstanceId">>;
+type SettingsPatch = Partial<
+  Pick<
+    AppSettings,
+    | "aiApiKey"
+    | "aiModel"
+    | "aiBaseUrl"
+    | "googleSpreadsheetId"
+    | "googleSheetName"
+    | "hfApiToken"
+    | "hfModel"
+    | "whatsappNumber"
+    | "whatsappApiUrl"
+    | "whatsappToken"
+    | "whatsappInstanceId"
+    | "supabaseUrl"
+    | "supabaseKey"
+    | "supabaseTableName"
+  >
+>;
 
 function parseBody(body: unknown): { ok: true; data: SettingsPatch } | { ok: false } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false };
   const b = body as Record<string, unknown>;
-  const allowed = ["aiApiKey", "aiModel", "aiBaseUrl", "googleSpreadsheetId", "googleSheetName", "hfApiToken", "hfModel", "whatsappNumber", "whatsappApiUrl", "whatsappToken", "whatsappInstanceId"] as const;
+  const allowed = [
+    "aiApiKey",
+    "aiModel",
+    "aiBaseUrl",
+    "googleSpreadsheetId",
+    "googleSheetName",
+    "hfApiToken",
+    "hfModel",
+    "whatsappNumber",
+    "whatsappApiUrl",
+    "whatsappToken",
+    "whatsappInstanceId",
+    "supabaseUrl",
+    "supabaseKey",
+    "supabaseTableName",
+  ] as const;
   const data: SettingsPatch = {};
   for (const key of allowed) {
     const val = b[key];
@@ -40,6 +72,10 @@ function buildSettingsResponse(s: AppSettings) {
     whatsappToken: s.whatsappToken ? maskToken(s.whatsappToken) : "",
     whatsappTokenIsSet: Boolean(s.whatsappToken),
     whatsappInstanceId: s.whatsappInstanceId ?? "",
+    supabaseUrl: s.supabaseUrl ?? "",
+    supabaseKey: s.supabaseKey ? maskToken(s.supabaseKey) : "",
+    supabaseKeyIsSet: Boolean(s.supabaseKey),
+    supabaseTableName: s.supabaseTableName ?? "app_users",
   };
 }
 

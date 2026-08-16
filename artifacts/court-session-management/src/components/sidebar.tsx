@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { LayoutDashboard, MessageSquare, Calendar, Moon, Sun, LogOut, Settings, Scale, FileText, ShieldCheck, Gavel, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Calendar, Moon, Sun, LogOut, Settings, Scale, FileText, ShieldCheck, Gavel, CheckSquare, Users } from 'lucide-react';
 import { useTheme } from './theme-provider';
 import { useLogout } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ const navigation = [
   { name: 'الوكالات', path: '/poa', icon: ShieldCheck },
   { name: 'الأحكام', path: '/judgments', icon: Gavel },
   { name: 'المهام', path: '/tasks', icon: CheckSquare },
+  { name: 'إدارة المستخدمين', path: '/users', icon: Users },
   { name: 'الإعدادات', path: '/settings', icon: Settings },
 ];
 

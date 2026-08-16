@@ -119,6 +119,23 @@ export const env = {
     return readEnv("AI_MODEL") ?? "qwen/qwen-2.5-7b-instruct";
   },
 
+  // --- Supabase Settings ---
+  get supabaseUrl(): string | undefined {
+    const stored = getSettings().supabaseUrl;
+    if (stored && stored.trim()) return stored.trim();
+    return readEnv("SUPABASE_URL");
+  },
+  get supabaseKey(): string | undefined {
+    const stored = getSettings().supabaseKey;
+    if (stored && stored.trim()) return stored.trim();
+    return readEnv("SUPABASE_SERVICE_ROLE_KEY") ?? readEnv("SUPABASE_KEY") ?? readEnv("SUPABASE_ANON_KEY");
+  },
+  get supabaseTableName(): string {
+    const stored = getSettings().supabaseTableName;
+    if (stored && stored.trim()) return stored.trim();
+    return readEnv("SUPABASE_TABLE_NAME") ?? "app_users";
+  },
+
   // --- Scheduler ---
   get reminderCronExpression(): string {
     return readEnv("REMINDER_CRON_EXPRESSION") ?? "*/10 * * * *";
@@ -183,3 +200,12 @@ export function isAiConfigured(): boolean {
   const stored = getSettings().aiApiKey;
   return Boolean((stored && stored.trim()) || readEnv("AI_API_KEY"));
 }
+
+/** Returns true only if Supabase URL and Key are configured, without throwing. */
+export function isSupabaseConfigured(): boolean {
+  const settings = getSettings();
+  const hasUrl = Boolean((settings.supabaseUrl && settings.supabaseUrl.trim()) || readEnv("SUPABASE_URL"));
+  const hasKey = Boolean((settings.supabaseKey && settings.supabaseKey.trim()) || readEnv("SUPABASE_SERVICE_ROLE_KEY") || readEnv("SUPABASE_KEY") || readEnv("SUPABASE_ANON_KEY"));
+  return hasUrl && hasKey;
+}
+

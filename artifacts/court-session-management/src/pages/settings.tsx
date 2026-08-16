@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Save, Eye, EyeOff, CheckCircle2, Settings2, Bot, Sheet, MessageSquare, Send } from 'lucide-react';
+import {
+  Save,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Settings2,
+  Bot,
+  Sheet,
+  MessageSquare,
+  Send,
+  Database,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +33,10 @@ interface SettingsData {
   whatsappToken: string;
   whatsappTokenIsSet: boolean;
   whatsappInstanceId: string;
+  supabaseUrl: string;
+  supabaseKey: string;
+  supabaseKeyIsSet: boolean;
+  supabaseTableName: string;
 }
 
 interface SettingsFormState {
@@ -34,7 +51,25 @@ interface SettingsFormState {
   whatsappApiUrl: string;
   whatsappToken: string;
   whatsappInstanceId: string;
+  supabaseUrl: string;
+  supabaseKey: string;
+  supabaseTableName: string;
 }
+
+const SUPABASE_SQL_SCRIPT = `-- أنشئ جدول المستخدمين في Supabase عبر SQL Editor:
+create table if not exists public.app_users (
+  id uuid primary key default gen_random_uuid(),
+  username text unique not null,
+  email text,
+  password_hash text not null,
+  role text default 'staff', -- 'admin' | 'staff'
+  display_name text,
+  created_at timestamp with time zone default now()
+);
+
+-- تفعيل فهرس سريع للبحث
+create index if not exists idx_app_users_username on public.app_users (username);
+create index if not exists idx_app_users_email on public.app_users (email);`;
 
 async function fetchSettings(): Promise<SettingsData> {
   const res = await fetch('/api/settings', { credentials: 'include' });
@@ -143,6 +178,10 @@ export default function SettingsPage() {
   const [showWaToken, setShowWaToken] = useState(false);
   const [waTokenIsSet, setWaTokenIsSet] = useState(false);
 
+  const [showSupabaseKey, setShowSupabaseKey] = useState(false);
+  const [supabaseKeyIsSet, setSupabaseKeyIsSet] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   const [form, setForm] = useState<SettingsFormState>({
@@ -157,11 +196,15 @@ export default function SettingsPage() {
     whatsappApiUrl: '',
     whatsappToken: '',
     whatsappInstanceId: '',
+    supabaseUrl: '',
+    supabaseKey: '',
+    supabaseTableName: '',
   });
 
   const [maskedToken, setMaskedToken] = useState('');
   const [maskedHfToken, setMaskedHfToken] = useState('');
   const [maskedWaToken, setMaskedWaToken] = useState('');
+  const [maskedSupabaseKey, setMaskedSupabaseKey] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -173,6 +216,9 @@ export default function SettingsPage() {
         setMaskedHfToken(data.hfApiToken);
         setWaTokenIsSet(data.whatsappTokenIsSet);
         setMaskedWaToken(data.whatsappToken);
+        setSupabaseKeyIsSet(data.supabaseKeyIsSet);
+        setMaskedSupabaseKey(data.supabaseKey);
+
         setForm({
           aiApiKey: '',
           aiModel: data.aiModel,
@@ -185,6 +231,9 @@ export default function SettingsPage() {
           whatsappApiUrl: data.whatsappApiUrl,
           whatsappToken: '',
           whatsappInstanceId: data.whatsappInstanceId,
+          supabaseUrl: data.supabaseUrl,
+          supabaseKey: '',
+          supabaseTableName: data.supabaseTableName || 'app_users',
         });
       })
       .catch((err: unknown) => {
@@ -193,6 +242,13 @@ export default function SettingsPage() {
       })
       .finally(() => setLoading(false));
   }, [toast]);
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
+    setCopiedSql(true);
+    toast({ title: 'تم النسخ', description: 'تم نسخ سكربت SQL لإنشاء الجدول في Supabase.' });
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -206,6 +262,8 @@ export default function SettingsPage() {
         whatsappNumber: form.whatsappNumber,
         whatsappApiUrl: form.whatsappApiUrl,
         whatsappInstanceId: form.whatsappInstanceId,
+        supabaseUrl: form.supabaseUrl,
+        supabaseTableName: form.supabaseTableName,
       };
       if (form.aiApiKey.trim()) {
         payload.aiApiKey = form.aiApiKey.trim();
@@ -216,6 +274,9 @@ export default function SettingsPage() {
       if (form.whatsappToken.trim()) {
         payload.whatsappToken = form.whatsappToken.trim();
       }
+      if (form.supabaseKey.trim()) {
+        payload.supabaseKey = form.supabaseKey.trim();
+      }
 
       const updated = await updateSettings(payload);
       setTokenIsSet(updated.aiApiKeyIsSet);
@@ -224,7 +285,16 @@ export default function SettingsPage() {
       setMaskedHfToken(updated.hfApiToken);
       setWaTokenIsSet(updated.whatsappTokenIsSet);
       setMaskedWaToken(updated.whatsappToken);
-      setForm((prev) => ({ ...prev, aiApiKey: '', hfApiToken: '', whatsappToken: '' }));
+      setSupabaseKeyIsSet(updated.supabaseKeyIsSet);
+      setMaskedSupabaseKey(updated.supabaseKey);
+
+      setForm((prev) => ({
+        ...prev,
+        aiApiKey: '',
+        hfApiToken: '',
+        whatsappToken: '',
+        supabaseKey: '',
+      }));
       setSavedAt(new Date());
       toast({ title: 'تم الحفظ ✅', description: 'تم حفظ الإعدادات بنجاح.' });
     } catch (err: unknown) {
@@ -273,7 +343,7 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold tracking-tight">إعدادات المنصة</h1>
         </div>
         <p className="text-muted-foreground text-sm mr-3">
-          تحكّم في إعدادات تذكير الواتساب، مفاتيح الذكاء الاصطناعي، والربط مع Google Sheets
+          تحكّم في إعدادات تذكير الواتساب، قاعدة بيانات المستخدمين Supabase، مفاتيح الذكاء الاصطناعي، والربط مع Google Sheets
         </p>
       </div>
 
@@ -286,6 +356,97 @@ export default function SettingsPage() {
           </p>
         </div>
       )}
+
+      {/* Supabase Users Database Settings Card */}
+      <div className="fade-in-up rounded-xl border border-sky-500/30 bg-card overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-sky-500/10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center">
+              <Database className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
+                إعدادات قاعدة بيانات المستخدمين (Supabase)
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ربط حسابات موظفي المكتب السحابية للتحكم بالمستخدمين وإدارتهم
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopySql}
+            className="gap-2 text-xs border-sky-500/40 text-sky-700 dark:text-sky-300 hover:bg-sky-500/10"
+          >
+            {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedSql ? 'تم نسخ سكربت SQL' : 'نسخ سكربت الجدول'}
+          </Button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <SettingField
+            id="supabaseUrl"
+            label="رابط المشروع (Supabase Project URL)"
+            placeholder="https://xyzprojectid.supabase.co"
+            value={form.supabaseUrl}
+            onChange={(v) => field('supabaseUrl', v)}
+            mono
+            dir="ltr"
+            description="الرابط الخاص بمشروع Supabase من Settings ← API"
+          />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="supabaseKey" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              مفتاح الخدمة السحابية (Supabase Service Role Key / Secret)
+              {supabaseKeyIsSet && (
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold normal-case tracking-normal text-xs bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  ✔ محدَّد
+                </span>
+              )}
+            </Label>
+            <div className="relative">
+              <Input
+                id="supabaseKey"
+                type={showSupabaseKey ? 'text' : 'password'}
+                placeholder={
+                  supabaseKeyIsSet
+                    ? `القيمة الحالية: ${maskedSupabaseKey} — اتركه فارغاً للإبقاء عليها`
+                    : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                }
+                value={form.supabaseKey}
+                onChange={(e) => field('supabaseKey', e.target.value)}
+                className="font-mono h-9 text-sm pe-10"
+                dir="ltr"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 end-0 px-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowSupabaseKey((v) => !v)}
+                tabIndex={-1}
+              >
+                {showSupabaseKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              مفتاح Service Role Key لإدارة المستخدمين والتسجيل الآمن (من Project Settings ← API).
+            </p>
+          </div>
+
+          <SettingField
+            id="supabaseTableName"
+            label="اسم جدول المستخدمين (Table Name)"
+            placeholder="app_users"
+            value={form.supabaseTableName}
+            onChange={(v) => field('supabaseTableName', v)}
+            mono
+            dir="ltr"
+            description="الافتراضي: app_users"
+          />
+        </div>
+      </div>
 
       {/* WhatsApp Reminders Card */}
       <div className="fade-in-up rounded-xl border border-emerald-500/30 bg-card overflow-hidden shadow-sm">
@@ -331,7 +492,7 @@ export default function SettingsPage() {
           <SettingField
             id="whatsappApiUrl"
             label="رابط بوابة API الواتساب (اختياري - Gateway API URL)"
-            placeholder="https://api.ultramsg.com/instanceXXXXX/messages/chat"
+            placeholder="https://api.green-api.com أو https://api.ultramsg.com/..."
             value={form.whatsappApiUrl}
             onChange={(v) => field('whatsappApiUrl', v)}
             mono

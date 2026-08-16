@@ -3,14 +3,30 @@ import { env } from "../config/env";
 
 export interface SessionCookiePayload {
   username: string;
+  userId?: string;
+  role?: string;
+  displayName?: string;
   issuedAt: number;
 }
 
 const SESSION_COOKIE_NAME = "court_session_auth";
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-export function setSessionCookie(res: Response, username: string): void {
-  const payload: SessionCookiePayload = { username, issuedAt: Date.now() };
+export function setSessionCookie(
+  res: Response,
+  userData: string | { username: string; userId?: string; role?: string; displayName?: string },
+): void {
+  const payload: SessionCookiePayload =
+    typeof userData === "string"
+      ? { username: userData, issuedAt: Date.now(), role: "admin" }
+      : {
+          username: userData.username,
+          userId: userData.userId,
+          role: userData.role || "staff",
+          displayName: userData.displayName,
+          issuedAt: Date.now(),
+        };
+
   res.cookie(SESSION_COOKIE_NAME, JSON.stringify(payload), {
     httpOnly: true,
     sameSite: "strict",
