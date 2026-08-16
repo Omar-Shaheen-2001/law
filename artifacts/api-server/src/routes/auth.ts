@@ -9,7 +9,7 @@ import {
   requireAdmin,
   setSessionCookie,
 } from "../middlewares/auth.middleware";
-import { loginRateLimiter } from "../middlewares/rate-limiter.middleware";
+import { loginRateLimiter, adminLoginRateLimiter } from "../middlewares/rate-limiter.middleware";
 import { verifySupabaseUser, ensureDefaultAdmin } from "../services/supabase.service";
 
 const router: IRouter = Router();
@@ -78,7 +78,7 @@ router.post("/auth/login", loginRateLimiter, attachAuthUser, async (req, res) =>
  * Dedicated Admin Portal Login
  * Only users with role === 'admin' are permitted
  */
-router.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, res) => {
+router.post("/auth/admin-login", adminLoginRateLimiter, attachAuthUser, async (req, res) => {
   const parseResult = LoginBody.safeParse(req.body);
   if (!parseResult.success) {
     res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان." });
@@ -86,6 +86,8 @@ router.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, r
   }
 
   const { username, password } = parseResult.data;
+
+  logger.info({ username, supabaseConfigured: isSupabaseConfigured() }, "Admin login attempt");
 
   // 1. If Supabase is configured
   if (isSupabaseConfigured()) {
@@ -120,7 +122,11 @@ router.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, r
   }
 
   // 2. Fallback to dedicated admin env credentials
-  if (username === env.adminUsername && password === env.adminPassword) {
+  const expectedUsername = env.adminUsername;
+  const expectedPassword = env.adminPassword;
+  logger.info({ username, expectedUsername, match: username === expectedUsername && password === expectedPassword }, "Admin env credential check");
+
+  if (username === expectedUsername && password === expectedPassword) {
     setSessionCookie(res, {
       username,
       role: "admin",

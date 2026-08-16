@@ -55288,8 +55288,13 @@ function createRateLimiter(options) {
 }
 var loginRateLimiter = createRateLimiter({
   windowMs: 3 * 60 * 1e3,
-  max: 5,
+  max: 10,
   message: "\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0639\u062F\u062F \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0627\u0644\u062F\u062E\u0648\u0644 \u0627\u0644\u062E\u0627\u0637\u0626\u0629. \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F 3 \u062F\u0642\u0627\u0626\u0642."
+});
+var adminLoginRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1e3,
+  max: 10,
+  message: "\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0639\u062F\u062F \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u062F\u062E\u0648\u0644 \u0627\u0644\u0645\u0634\u0631\u0641. \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F 5 \u062F\u0642\u0627\u0626\u0642."
 });
 
 // ../../node_modules/.pnpm/@supabase+supabase-js@2.112.3/node_modules/@supabase/supabase-js/dist/index.mjs
@@ -63402,13 +63407,14 @@ router2.post("/auth/login", loginRateLimiter, attachAuthUser, async (req, res) =
   }
   res.status(401).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0623\u0648 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629." });
 });
-router2.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, res) => {
+router2.post("/auth/admin-login", adminLoginRateLimiter, attachAuthUser, async (req, res) => {
   const parseResult = LoginBody.safeParse(req.body);
   if (!parseResult.success) {
     res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0637\u0644\u0648\u0628\u0627\u0646." });
     return;
   }
   const { username, password } = parseResult.data;
+  logger.info({ username, supabaseConfigured: isSupabaseConfigured() }, "Admin login attempt");
   if (isSupabaseConfigured()) {
     try {
       await ensureDefaultAdmin();
@@ -63437,7 +63443,10 @@ router2.post("/auth/admin-login", loginRateLimiter, attachAuthUser, async (req, 
       logger.error({ err }, "Error authenticating admin with Supabase");
     }
   }
-  if (username === env.adminUsername && password === env.adminPassword) {
+  const expectedUsername = env.adminUsername;
+  const expectedPassword = env.adminPassword;
+  logger.info({ username, expectedUsername, match: username === expectedUsername && password === expectedPassword }, "Admin env credential check");
+  if (username === expectedUsername && password === expectedPassword) {
     setSessionCookie(res, {
       username,
       role: "admin",

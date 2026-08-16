@@ -45,7 +45,8 @@ export default function AdminLoginPage() {
         description: `تم تسجيل الدخول بنجاح بصلاحيات المشرف العام (${data.username}).`,
       });
 
-      queryClient.clear();
+      // Invalidate and refetch auth state before navigating
+      await queryClient.invalidateQueries();
       navigate('/admin', { replace: true });
     } catch (err: any) {
       setErrorMsg(err.message || 'بيانات الدخول غير صحيحة أو لا تملك صلاحية المشرف.');

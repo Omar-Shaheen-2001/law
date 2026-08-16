@@ -53,9 +53,16 @@ export function createRateLimiter(options: RateLimitOptions) {
   };
 }
 
-/** Rate limiter specifically for login attempts: max 5 attempts per 3 minutes */
+/** Rate limiter specifically for login attempts: max 10 attempts per 3 minutes */
 export const loginRateLimiter = createRateLimiter({
   windowMs: 3 * 60 * 1000,
-  max: 5,
+  max: 10,
   message: "تم تجاوز عدد محاولات الدخول الخاطئة. يرجى المحاولة بعد 3 دقائق.",
+});
+
+/** Rate limiter for admin login: max 10 attempts per 5 minutes */
+export const adminLoginRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  message: "تم تجاوز عدد محاولات دخول المشرف. يرجى المحاولة بعد 5 دقائق.",
 });

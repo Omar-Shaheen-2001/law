@@ -11,16 +11,17 @@ export function AdminGuard({ children }: AdminGuardProps) {
   const { data: user, isLoading, isError } = useGetCurrentUser();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (isError || !user) {
-        navigate('/admin/login', { replace: true });
-      } else if ((user as any).role !== 'admin') {
-        // User is logged in but not an admin -> redirect to main sessions app
-        navigate('/', { replace: true });
-      }
+    if (isLoading) return; // Wait until auth check completes
+
+    if (isError || !user) {
+      navigate('/admin/login', { replace: true });
+    } else if ((user as any).role !== 'admin') {
+      // Logged-in staff user — redirect to the sessions app
+      navigate('/', { replace: true });
     }
   }, [user, isLoading, isError, navigate]);
 
+  // Show loader while checking auth
   if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background" dir="rtl">
@@ -32,6 +33,7 @@ export function AdminGuard({ children }: AdminGuardProps) {
     );
   }
 
+  // While redirecting, render nothing
   if (isError || !user || (user as any).role !== 'admin') {
     return null;
   }
