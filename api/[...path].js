@@ -55054,10 +55054,8 @@ var env = {
   get googleSpreadsheetId() {
     const stored = getSettings().googleSpreadsheetId;
     if (stored && stored.trim()) return stored.trim();
-    return requireEnv(
-      "GOOGLE_SPREADSHEET_ID",
-      "Create/open a Google Sheet, copy the ID from its URL, and share it with your service account email."
-    ).trim();
+    const val = readEnv("GOOGLE_SPREADSHEET_ID");
+    return val ? val.trim() : "";
   },
   get googleServiceAccountJson() {
     try {
@@ -55077,17 +55075,15 @@ var env = {
       }
     } catch (e) {
     }
-    const raw = requireEnv(
-      "GOOGLE_SERVICE_ACCOUNT_JSON",
-      "Paste the full JSON key downloaded from your Google Cloud service account."
-    );
-    try {
-      return JSON.parse(raw);
-    } catch {
-      throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON. Paste the entire service account key file contents."
-      );
+    const raw = readEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
     }
+    return null;
   },
   get googleSheetName() {
     const stored = getSettings().googleSheetName;
@@ -63618,9 +63614,9 @@ var userClientsMap = /* @__PURE__ */ new Map();
 function getDefaultClient() {
   if (!defaultSheetsClient) {
     const credentials = env.googleServiceAccountJson;
-    if (!credentials.client_email || !credentials.private_key) {
+    if (!credentials || !credentials.client_email || !credentials.private_key) {
       throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email/private_key. Paste the full service account key JSON."
+        "\u0645\u0644\u0641 Google Service Account JSON \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645. \u064A\u0631\u062C\u0649 \u0625\u0636\u0627\u0641\u062A\u0647 \u0641\u064A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0623\u0648 \u0641\u064A \u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0627\u0644\u0628\u064A\u0626\u0629."
       );
     }
     const privateKey = credentials.private_key.replace(/\\n/g, "\n");
@@ -63650,16 +63646,25 @@ async function getGoogleContext(userId) {
           client = import_googleapis.google.sheets({ version: "v4", auth });
           userClientsMap.set(userId, client);
         }
-        const spreadsheetId = userCreds.spreadsheetId || env.googleSpreadsheetId;
-        const sheetName = userCreds.sheetName || env.googleSheetName;
+        const spreadsheetId = userCreds.spreadsheetId && userCreds.spreadsheetId.trim() || env.googleSpreadsheetId;
+        if (!spreadsheetId) {
+          throw new Error("\u0645\u0639\u0631\u0651\u0641 \u062C\u062F\u0648\u0644 Google Spreadsheet ID \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645.");
+        }
+        const sheetName = userCreds.sheetName && userCreds.sheetName.trim() || env.googleSheetName || "Sessions";
         return { sheets: client, spreadsheetId, sheetName };
       }
     }
   }
+  const globalSpreadsheetId = env.googleSpreadsheetId;
+  if (!globalSpreadsheetId) {
+    throw new Error(
+      "\u0644\u0645 \u064A\u062A\u0645 \u0625\u0639\u062F\u0627\u062F Google Sheets. \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0645\u0644\u0641 Google Service Account JSON \u0648\u0645\u0639\u0631\u0641 \u0627\u0644\u062C\u062F\u0648\u0644 (Spreadsheet ID) \u0641\u064A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0645\u0646 \u0644\u0648\u062D\u0629 \u0627\u0644\u0625\u062F\u0627\u0631\u0629."
+    );
+  }
   return {
     sheets: getDefaultClient(),
-    spreadsheetId: env.googleSpreadsheetId,
-    sheetName: env.googleSheetName
+    spreadsheetId: globalSpreadsheetId,
+    sheetName: env.googleSheetName || "Sessions"
   };
 }
 async function getSheetId(ctx) {
@@ -64982,12 +64987,6 @@ async function saveSessionReport(id, report, userId) {
 // src/routes/dashboard.ts
 var router3 = (0, import_express3.Router)();
 router3.get("/dashboard/stats", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({
-      error: "Google Sheets is not configured yet. Set GOOGLE_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON."
-    });
-    return;
-  }
   try {
     const userId = req.authUser?.userId;
     const stats = await getDashboardStats(userId);
@@ -81259,16 +81258,7 @@ var WhatsappReminderChannel = class {
 
 // src/routes/sessions.ts
 var router5 = (0, import_express5.Router)();
-function unconfiguredResponse() {
-  return {
-    error: "Google Sheets is not configured yet. Set GOOGLE_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON."
-  };
-}
 router5.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
-    return;
-  }
   const parseResult = ListSessionsQueryParams.safeParse(req.query);
   if (!parseResult.success) {
     res.status(400).json({ error: "Invalid status filter." });
@@ -81282,15 +81272,11 @@ router5.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to list sessions");
     const isClockError = String(err?.message || "").includes("invalid_grant") || String(err?.stack || "").includes("invalid_grant");
-    const errorMsg = isClockError ? "\u0641\u0634\u0644 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0640 Google Sheets \u0628\u0633\u0628\u0628 \u0639\u062F\u0645 \u062A\u0632\u0627\u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u0648\u062A\u0648\u0642\u064A\u062A \u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0639 \u0633\u064A\u0631\u0641\u0631\u0627\u062A Google (invalid_grant)." : "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0644\u0633\u0627\u062A.";
+    const errorMsg = isClockError ? "\u0641\u0634\u0644 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0640 Google Sheets \u0628\u0633\u0628\u0628 \u0639\u062F\u0645 \u062A\u0632\u0627\u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u0648\u062A\u0648\u0642\u064A\u062A \u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0639 \u0633\u064A\u0631\u0641\u0631\u0627\u062A Google (invalid_grant)." : err?.message || "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0644\u0633\u0627\u062A.";
     res.status(500).json({ error: errorMsg });
   }
 });
 router5.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
-    return;
-  }
   const parseResult = CreateSessionBody.safeParse(req.body);
   if (!parseResult.success) {
     res.status(400).json({ error: "Invalid session data." });
@@ -81303,17 +81289,13 @@ router5.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     res.status(201).json(data);
   } catch (err) {
     logger.error({ err }, "Failed to create session");
-    res.status(500).json({ error: "Failed to create session." });
+    res.status(500).json({ error: err?.message || "\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062C\u0644\u0633\u0629." });
   }
 });
 router5.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   try {
@@ -81327,17 +81309,13 @@ router5.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     res.json(data);
   } catch (err) {
     logger.error({ err }, "Failed to load session");
-    res.status(500).json({ error: "Failed to load session." });
+    res.status(500).json({ error: err?.message || "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u062C\u0644\u0633\u0629." });
   }
 });
 router5.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   const parseResult = UpdateSessionBody.safeParse(req.body);
@@ -81356,17 +81334,13 @@ router5.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => 
     res.json(data);
   } catch (err) {
     logger.error({ err }, "Failed to update session");
-    res.status(500).json({ error: "Failed to update session." });
+    res.status(500).json({ error: err?.message || "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062C\u0644\u0633\u0629." });
   }
 });
 router5.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   try {
@@ -81379,7 +81353,7 @@ router5.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) =>
     res.status(204).send();
   } catch (err) {
     logger.error({ err }, "Failed to delete session");
-    res.status(500).json({ error: "Failed to delete session." });
+    res.status(500).json({ error: err?.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u062C\u0644\u0633\u0629." });
   }
 });
 router5.post("/sessions/:id/send-whatsapp", attachAuthUser, requireAuth, async (req, res) => {
@@ -81556,10 +81530,6 @@ router7.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res
     res.status(400).json({ error: "Invalid session id." });
     return;
   }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({ error: "Google Sheets is not configured." });
-    return;
-  }
   try {
     const userId = req.authUser?.userId;
     const report = await getSessionReport(id, userId);
@@ -81570,17 +81540,13 @@ router7.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res
     res.json(report);
   } catch (err) {
     logger.error({ err }, "Failed to fetch session report");
-    res.status(500).json({ error: "Failed to fetch session report." });
+    res.status(500).json({ error: err?.message || "Failed to fetch session report." });
   }
 });
 router7.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({ error: "Google Sheets is not configured." });
     return;
   }
   try {
@@ -81596,7 +81562,7 @@ router7.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "Failed to save session report");
-    res.status(500).json({ error: "Failed to save session report." });
+    res.status(500).json({ error: err?.message || "Failed to save session report." });
   }
 });
 var reports_default = router7;

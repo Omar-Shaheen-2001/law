@@ -40,10 +40,10 @@ function getDefaultClient(): sheets_v4.Sheets {
     const credentials = env.googleServiceAccountJson as {
       client_email?: string;
       private_key?: string;
-    };
-    if (!credentials.client_email || !credentials.private_key) {
+    } | null;
+    if (!credentials || !credentials.client_email || !credentials.private_key) {
       throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email/private_key. Paste the full service account key JSON.",
+        "ملف Google Service Account JSON غير محدد في النظام. يرجى إضافته في بيانات المستخدم أو في متغيرات البيئة.",
       );
     }
     const privateKey = credentials.private_key.replace(/\\n/g, "\n");
@@ -89,18 +89,32 @@ export async function getGoogleContext(userId?: string): Promise<GoogleContext> 
           userClientsMap.set(userId, client);
         }
 
-        const spreadsheetId = userCreds.spreadsheetId || env.googleSpreadsheetId;
-        const sheetName = userCreds.sheetName || env.googleSheetName;
+        const spreadsheetId = (userCreds.spreadsheetId && userCreds.spreadsheetId.trim())
+          || env.googleSpreadsheetId;
+        if (!spreadsheetId) {
+          throw new Error("معرّف جدول Google Spreadsheet ID غير محدد لهذا المستخدم.");
+        }
+
+        const sheetName = (userCreds.sheetName && userCreds.sheetName.trim())
+          || env.googleSheetName
+          || "Sessions";
         return { sheets: client, spreadsheetId, sheetName };
       }
     }
   }
 
   // Global default fallback
+  const globalSpreadsheetId = env.googleSpreadsheetId;
+  if (!globalSpreadsheetId) {
+    throw new Error(
+      "لم يتم إعداد Google Sheets. يرجى إدخال ملف Google Service Account JSON ومعرف الجدول (Spreadsheet ID) في بيانات المستخدم من لوحة الإدارة.",
+    );
+  }
+
   return {
     sheets: getDefaultClient(),
-    spreadsheetId: env.googleSpreadsheetId,
-    sheetName: env.googleSheetName,
+    spreadsheetId: globalSpreadsheetId,
+    sheetName: env.googleSheetName || "Sessions",
   };
 }
 

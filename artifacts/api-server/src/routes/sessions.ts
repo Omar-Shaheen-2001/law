@@ -32,10 +32,6 @@ function unconfiguredResponse(): { error: string } {
 }
 
 router.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
-    return;
-  }
   const parseResult = ListSessionsQueryParams.safeParse(req.query);
   if (!parseResult.success) {
     res.status(400).json({ error: "Invalid status filter." });
@@ -51,16 +47,12 @@ router.get("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     const isClockError = String(err?.message || "").includes("invalid_grant") || String(err?.stack || "").includes("invalid_grant");
     const errorMsg = isClockError
       ? "فشل الاتصال بـ Google Sheets بسبب عدم تزامن تاريخ وتوقيت الجهاز مع سيرفرات Google (invalid_grant)."
-      : "فشل تحميل قائمة الجلسات.";
+      : (err?.message || "فشل تحميل قائمة الجلسات.");
     res.status(500).json({ error: errorMsg });
   }
 });
 
 router.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
-    return;
-  }
   const parseResult = CreateSessionBody.safeParse(req.body);
   if (!parseResult.success) {
     res.status(400).json({ error: "Invalid session data." });
@@ -71,9 +63,9 @@ router.post("/sessions", attachAuthUser, requireAuth, async (req, res) => {
     const session = await createSession(parseResult.data, userId);
     const data = CreateSessionResponse.parse(session);
     res.status(201).json(data);
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to create session");
-    res.status(500).json({ error: "Failed to create session." });
+    res.status(500).json({ error: err?.message || "فشل إنشاء الجلسة." });
   }
 });
 
@@ -81,10 +73,6 @@ router.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   try {
@@ -96,9 +84,9 @@ router.get("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     }
     const data = GetSessionResponse.parse(session);
     res.json(data);
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to load session");
-    res.status(500).json({ error: "Failed to load session." });
+    res.status(500).json({ error: err?.message || "فشل تحميل الجلسة." });
   }
 });
 
@@ -106,10 +94,6 @@ router.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   const parseResult = UpdateSessionBody.safeParse(req.body);
@@ -126,9 +110,9 @@ router.patch("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => {
     }
     const data = UpdateSessionResponse.parse(session);
     res.json(data);
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to update session");
-    res.status(500).json({ error: "Failed to update session." });
+    res.status(500).json({ error: err?.message || "فشل تحديث الجلسة." });
   }
 });
 
@@ -136,10 +120,6 @@ router.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => 
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json(unconfiguredResponse());
     return;
   }
   try {
@@ -150,9 +130,9 @@ router.delete("/sessions/:id", attachAuthUser, requireAuth, async (req, res) => 
       return;
     }
     res.status(204).send();
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to delete session");
-    res.status(500).json({ error: "Failed to delete session." });
+    res.status(500).json({ error: err?.message || "فشل حذف الجلسة." });
   }
 });
 

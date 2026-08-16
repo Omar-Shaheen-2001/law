@@ -13,10 +13,6 @@ router.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
     res.status(400).json({ error: "Invalid session id." });
     return;
   }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({ error: "Google Sheets is not configured." });
-    return;
-  }
   try {
     const userId = req.authUser?.userId;
     const report = await getSessionReport(id, userId);
@@ -26,9 +22,9 @@ router.get("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
       return;
     }
     res.json(report);
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to fetch session report");
-    res.status(500).json({ error: "Failed to fetch session report." });
+    res.status(500).json({ error: err?.message || "Failed to fetch session report." });
   }
 });
 
@@ -37,10 +33,6 @@ router.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
   const id = Number(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid session id." });
-    return;
-  }
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({ error: "Google Sheets is not configured." });
     return;
   }
   try {
@@ -54,9 +46,9 @@ router.put("/sessions/:id/report", attachAuthUser, requireAuth, async (req, res)
     }
     logger.info({ id }, "Session report saved successfully");
     res.json(updated);
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Failed to save session report");
-    res.status(500).json({ error: "Failed to save session report." });
+    res.status(500).json({ error: err?.message || "Failed to save session report." });
   }
 });
 

@@ -8,13 +8,6 @@ import { attachAuthUser, requireAuth } from "../middlewares/auth.middleware";
 const router: IRouter = Router();
 
 router.get("/dashboard/stats", attachAuthUser, requireAuth, async (req, res) => {
-  if (!isGoogleSheetsConfigured()) {
-    res.status(500).json({
-      error:
-        "Google Sheets is not configured yet. Set GOOGLE_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON.",
-    });
-    return;
-  }
   try {
     const userId = req.authUser?.userId;
     const stats = await getDashboardStats(userId);

@@ -61,12 +61,10 @@ export const env = {
   get googleSpreadsheetId(): string {
     const stored = getSettings().googleSpreadsheetId;
     if (stored && stored.trim()) return stored.trim();
-    return requireEnv(
-      "GOOGLE_SPREADSHEET_ID",
-      "Create/open a Google Sheet, copy the ID from its URL, and share it with your service account email.",
-    ).trim();
+    const val = readEnv("GOOGLE_SPREADSHEET_ID");
+    return val ? val.trim() : "";
   },
-  get googleServiceAccountJson(): Record<string, unknown> {
+  get googleServiceAccountJson(): Record<string, unknown> | null {
     try {
       const fs = require("fs");
       const path = require("path");
@@ -86,17 +84,15 @@ export const env = {
       // Ignore filesystem errors and fallback to env var
     }
 
-    const raw = requireEnv(
-      "GOOGLE_SERVICE_ACCOUNT_JSON",
-      "Paste the full JSON key downloaded from your Google Cloud service account.",
-    );
-    try {
-      return JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON. Paste the entire service account key file contents.",
-      );
+    const raw = readEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
+    if (raw) {
+      try {
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
     }
+    return null;
   },
   get googleSheetName(): string {
     const stored = getSettings().googleSheetName;
